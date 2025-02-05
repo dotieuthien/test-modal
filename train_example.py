@@ -19,7 +19,7 @@ app = modal.App(
     volumes=VOLUME_CONFIG,
 )
 
-SINGLE_GPU_CONFIG = os.environ.get("GPU_CONFIG", "a100:1")
+SINGLE_GPU_CONFIG = os.environ.get("GPU_CONFIG", "h100:1")
 
 
 @app.function(
@@ -181,7 +181,7 @@ def train_example(run_folder: str):
             learning_rate=5e-7,
             lr_scheduler_type="cosine",
             logging_steps=10,
-            max_steps=100,
+            max_steps=3,
             per_device_train_batch_size=1,
             gradient_accumulation_steps=1,
             gradient_checkpointing=True,
