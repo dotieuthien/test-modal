@@ -83,8 +83,8 @@ def train_example(run_folder: str):
                 # add synthetic <think> as its already part of the prompt and prefilled for the assistant to more easily match the regex
                 completion = "<think>" + completion
                 if random.random() < 0.1:  # 1% chance to write samples into a file
-                    os.makedirs("completion_samples", exist_ok=True)
-                    log_file = os.path.join("completion_samples", "completion_samples.txt")
+                    os.makedirs(os.path.join(run_folder, "completion_samples"), exist_ok=True)
+                    log_file = os.path.join(run_folder, "completion_samples", "completion_samples.txt")
                     with open(log_file, "a") as f:
                         f.write(f"\n\n==============\n")
                         f.write(completion)
@@ -146,11 +146,12 @@ def train_example(run_folder: str):
                 if abs(float(result) - float(gt)) < 1e-5:
                     rewards.append(1.0)
                     if random.random() < 0.10:  # 10% chance to write fully successful samples into a file
-                        os.makedirs("completion_samples", exist_ok=True)
-                        log_file = os.path.join("completion_samples", "success_completion_samples.txt")
+                        os.makedirs(os.path.join(run_folder, "completion_samples"), exist_ok=True)
+                        log_file = os.path.join(run_folder, "completion_samples", "success_completion_samples.txt")
                         with open(log_file, "a") as f:
                             f.write(f"\n\n==============\n")
                             f.write(completion)
+                            
                 else:
                     rewards.append(0.0)
             except Exception:
@@ -181,7 +182,7 @@ def train_example(run_folder: str):
             learning_rate=5e-7,
             lr_scheduler_type="cosine",
             logging_steps=10,
-            max_steps=3,
+            max_steps=100,
             per_device_train_batch_size=1,
             gradient_accumulation_steps=1,
             gradient_checkpointing=True,
@@ -279,6 +280,7 @@ def train_example(run_folder: str):
             f'*** Starting training {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} for {training_args.num_train_epochs} epochs***'
         )
         train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
+        
         # Log and save metrics
         metrics = train_result.metrics
         metrics["train_samples"] = len(train_dataset)
@@ -324,7 +326,9 @@ def launch():
     run_name = f"test-r1-{time_string}"
     run_folder = f"/runs/{run_name}"
     os.makedirs(run_folder, exist_ok=True)
-
+    
+    os.makedirs(os.path.join(run_folder, "completion_samples"), exist_ok=True)
+    
     print(f"Preparing training run in {run_folder}.")
     VOLUME_CONFIG["/runs"].commit()
     
