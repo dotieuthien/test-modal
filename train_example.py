@@ -25,7 +25,7 @@ SINGLE_GPU_CONFIG = os.environ.get("GPU_CONFIG", "h100:1")
 @app.function(
     image=vllm_image,
     gpu=SINGLE_GPU_CONFIG,
-    timeout=6000,
+    timeout=86400,
 )
 def train_example(run_folder: str):
     import subprocess
