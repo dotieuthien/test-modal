@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from pathlib import PurePosixPath
 from typing import Union
-from image import vllm_image
+from test_r1.image import vllm_image
 
 
 test_r1_volume = modal.Volume.from_name(
@@ -181,10 +181,10 @@ def train_example(run_folder: str):
             output_dir="qwen-r1-aha-moment",
             learning_rate=5e-7,
             lr_scheduler_type="cosine",
-            logging_steps=10,
+            logging_steps=1,
             max_steps=100,
-            per_device_train_batch_size=1,
-            gradient_accumulation_steps=1,
+            per_device_train_batch_size=2,
+            gradient_accumulation_steps=2,
             gradient_checkpointing=True,
             gradient_checkpointing_kwargs={"use_reentrant": False},
             bf16=True,
