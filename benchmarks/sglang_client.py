@@ -1,6 +1,7 @@
 """This simple script shows how to interact with an OpenAI-compatible server from a client."""
 
 import argparse
+import time
 
 import modal
 from openai import OpenAI
@@ -18,6 +19,7 @@ class Colors:
 
 
 def get_completion(client, model_id, messages, args):
+    start_time = time.time()
     completion_args = {
         "model": model_id,
         "messages": messages,
@@ -35,9 +37,14 @@ def get_completion(client, model_id, messages, args):
     completion_args = {
         k: v for k, v in completion_args.items() if v is not None
     }
+    
+    print("--------------------------------")
+    print(completion_args)
 
     try:
         response = client.chat.completions.create(**completion_args)
+        end_time = time.time()
+        print(f"Time taken: {end_time - start_time} seconds")
         return response
     except Exception as e:
         print(Colors.RED, f"Error during API call: {e}", Colors.END, sep="")
@@ -193,7 +200,7 @@ def main():
             if len(messages) > MAX_HISTORY:
                 messages = messages[:1] + messages[-MAX_HISTORY + 1 :]
             
-            image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+            image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
             messages.append(
                 {
                     "role": "user",
@@ -228,7 +235,7 @@ def main():
                     {"role": "assistant", "content": assistant_message}
                 )
     else:
-        image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+        image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
         messages.append(
             {
                 "role": "user",
@@ -259,4 +266,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    for i in range(10):
+        main()

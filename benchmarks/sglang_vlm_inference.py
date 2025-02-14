@@ -19,6 +19,7 @@ sglang_image = (
 MODELS_DIR = "/llama_models"
 MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
 MODEL_REVISION = "a7a06a1cc11b4514ce9edcde0e3ca1d16e5ff2fc"
+MODEL_CHAT_TEMPLATE = "qwen2-vl"
 
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
@@ -54,7 +55,7 @@ def serve():
 
     volume.reload()  # ensure we have the latest version of the weights
 
-    server_args = prepare_server_args(["--model-path", MODELS_DIR + "/" + MODEL_NAME])
+    server_args = prepare_server_args(["--model-path", MODELS_DIR + "/" + MODEL_NAME, "--chat-template", MODEL_CHAT_TEMPLATE])
     pipe_finish_writer = None
     tokenizer_manager, scheduler_info = _launch_subprocesses(server_args=server_args)
     set_global_state(
