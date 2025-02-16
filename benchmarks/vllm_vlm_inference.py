@@ -4,6 +4,7 @@ import modal
 vllm_image = modal.Image.debian_slim(python_version="3.12").pip_install(
     "vllm==0.6.3post1", 
     "fastapi[standard]==0.115.4",
+    "GPUtil"
 )
 
 MODELS_DIR = "/llama_models"
@@ -42,6 +43,21 @@ def serve():
     )
     from vllm.entrypoints.openai.serving_engine import BaseModelPath
     from vllm.usage.usage_lib import UsageContext
+    
+    
+    def print_system_info():
+        import psutil
+        import GPUtil
+
+        # Memory info
+        mem = psutil.virtual_memory()
+        print(f"Memory: Total={mem.total / (1024**3):.2f}GB, Available={mem.available / (1024**3):.2f}GB")
+        
+        # GPU info
+        gpus = GPUtil.getGPUs()
+        for i, gpu in enumerate(gpus):
+            print(f"GPU {i}: {gpu.name}, Memory Total={gpu.memoryTotal}MB, Memory Used={gpu.memoryUsed}MB")
+
 
     volume.reload()  # ensure we have the latest version of the weights
 
@@ -80,24 +96,31 @@ def serve():
         BaseModelPath(name=MODEL_NAME.split("/")[1], model_path=MODEL_NAME)
     ]
 
-    api_server.chat = lambda s: OpenAIServingChat(
-        engine,
-        model_config=model_config,
-        base_model_paths=base_model_paths,
-        chat_template=None,
-        response_role="assistant",
-        lora_modules=[],
-        prompt_adapters=[],
-        request_logger=request_logger,
-    )
-    api_server.completion = lambda s: OpenAIServingCompletion(
-        engine,
-        model_config=model_config,
-        base_model_paths=base_model_paths,
-        lora_modules=[],
-        prompt_adapters=[],
-        request_logger=request_logger,
-    )
+    api_server.chat = lambda s: (
+        print_system_info(),
+        OpenAIServingChat(
+            engine,
+            model_config=model_config,
+            base_model_paths=base_model_paths,
+            chat_template=None,
+            response_role="assistant",
+            lora_modules=[],
+            prompt_adapters=[],
+            request_logger=request_logger,
+        )
+    )[1]
+
+    api_server.completion = lambda s: (
+        print_system_info(),
+        OpenAIServingCompletion(
+            engine,
+            model_config=model_config,
+            base_model_paths=base_model_paths,
+            lora_modules=[],
+            prompt_adapters=[],
+            request_logger=request_logger,
+        )
+    )[1]
 
     return web_app
 

@@ -6,6 +6,7 @@ sglang_image = (
     .pip_install(  # add sglang and some Python dependencies
         "transformers==4.47.1",
         "numpy<2",
+        "GPUtil",
         "fastapi[standard]==0.115.4",
         "pydantic==2.9.2",
         "starlette==0.41.2",
@@ -64,6 +65,22 @@ def serve():
             scheduler_info=scheduler_info,
         )
     )
+    
+    
+    def print_system_info():
+        import psutil
+        import GPUtil
+
+        # Memory info
+        mem = psutil.virtual_memory()
+        print(f"Memory: Total={mem.total / (1024**3):.2f}GB, Available={mem.available / (1024**3):.2f}GB")
+        
+        # GPU info
+        gpus = GPUtil.getGPUs()
+        for i, gpu in enumerate(gpus):
+            print(f"GPU {i}: {gpu.name}, Memory Total={gpu.memoryTotal}MB, Memory Used={gpu.memoryUsed}MB")
+
+    print_system_info()
     
     # # Send a warmup request in the main thread
     # _wait_and_warmup(

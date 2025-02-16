@@ -19,7 +19,6 @@ class Colors:
 
 
 def get_completion(client, model_id, messages, args):
-    start_time = time.time()
     completion_args = {
         "model": model_id,
         "messages": messages,
@@ -43,8 +42,6 @@ def get_completion(client, model_id, messages, args):
 
     try:
         response = client.chat.completions.create(**completion_args)
-        end_time = time.time()
-        print(f"Time taken: {end_time - start_time} seconds")
         return response
     except Exception as e:
         print(Colors.RED, f"Error during API call: {e}", Colors.END, sep="")
@@ -267,4 +264,7 @@ def main():
 
 if __name__ == "__main__":
     for i in range(10):
+        start_time = time.time()
         main()
+        end_time = time.time()
+        print(f"Time taken: {end_time - start_time} seconds")
