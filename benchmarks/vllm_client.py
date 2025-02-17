@@ -237,7 +237,7 @@ def main():
                 "role": "user",
                 "content": [
                     {"type": "text", "text": args.prompt},
-                    {"type": "image_url", "image_url": {"url": image_url}},
+                    # {"type": "image_url", "image_url": {"url": image_url}},
                 ],
             }
         )

@@ -6,7 +6,7 @@ MODELS_DIR = "/llama_models"
 DEFAULT_NAME = "Qwen/Qwen2-VL-7B-Instruct"
 DEFAULT_REVISION = "a7a06a1cc11b4514ce9edcde0e3ca1d16e5ff2fc"
 
-GGUF_MODELS_NAME = "tensorblock/Qwen2-VL-7B-Instruct-GGUF"
+GGUF_MODELS_NAME = "Qwen/Qwen2-7B-Instruct-GGUF"
 
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
@@ -62,7 +62,7 @@ def download_gguf_model(model_name, force_download=False):
         model_name,
         local_dir=MODELS_DIR + "/" + model_name,
         allow_patterns = [
-            "Qwen2-VL-7B-Instruct-Q5_K_M.gguf",
+            "qwen2-7b-instruct-q5_k_m.gguf",
         ],
         force_download=force_download,
     )
