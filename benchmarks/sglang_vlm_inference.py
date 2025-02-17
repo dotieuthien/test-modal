@@ -2,11 +2,11 @@ import modal
 
 
 sglang_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
     .pip_install(  # add sglang and some Python dependencies
+        "GPUtil",
         "transformers==4.47.1",
         "numpy<2",
-        "GPUtil",
         "fastapi[standard]==0.115.4",
         "pydantic==2.9.2",
         "starlette==0.41.2",
@@ -15,6 +15,8 @@ sglang_image = (
         # as per sglang website: https://sgl-project.github.io/start/install.html
         extra_options="--find-links https://flashinfer.ai/whl/cu124/torch2.5/flashinfer-python",
     )
+    .run_commands("apt-get update")
+    .run_commands("apt-get install -y nvtop")
 )
 
 MODELS_DIR = "/llama_models"

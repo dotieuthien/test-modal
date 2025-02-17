@@ -1,10 +1,16 @@
 import modal
 
 
-vllm_image = modal.Image.debian_slim(python_version="3.12").pip_install(
-    "vllm==0.6.3post1", 
-    "fastapi[standard]==0.115.4",
-    "GPUtil"
+vllm_image = (
+    modal.Image.from_registry("nvidia/cuda:12.4.0-runtime-ubuntu22.04", add_python="3.12")
+    .pip_install(
+        "GPUtil",
+        "transformers==4.47.1",
+        "vllm==0.6.3post1", 
+        "fastapi[standard]==0.115.4",
+    )
+    .run_commands("apt-get update")
+    .run_commands("apt-get install -y nvtop")
 )
 
 MODELS_DIR = "/llama_models"
