@@ -26,7 +26,7 @@ volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
 app = modal.App("example-sglang-openai-compatible")
 
-N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
+N_GPU = 2  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
 # auth token. for production use, replace with a modal.Secret
 TOKEN = "super-secret-token"
 
@@ -56,7 +56,14 @@ def serve():
 
     volume.reload()  # ensure we have the latest version of the weights
 
-    server_args = prepare_server_args(["--model-path", MODELS_DIR + "/" + MODEL_NAME, "--chat-template", MODEL_CHAT_TEMPLATE])
+    server_args = prepare_server_args(
+        [
+            "--model-path", MODELS_DIR + "/" + MODEL_NAME, 
+            "--chat-template", MODEL_CHAT_TEMPLATE,
+            # "--tp", "2",
+            "--dp", "2",
+        ]
+    )
     pipe_finish_writer = None
     tokenizer_manager, scheduler_info = _launch_subprocesses(server_args=server_args)
     set_global_state(
@@ -80,14 +87,17 @@ def serve():
         for i, gpu in enumerate(gpus):
             print(f"GPU {i}: {gpu.name}, Memory Total={gpu.memoryTotal}MB, Memory Used={gpu.memoryUsed}MB")
 
-    print_system_info()
-    
-    # # Send a warmup request in the main thread
-    # _wait_and_warmup(
-    #     server_args,
-    #     pipe_finish_writer,
-    #     sglang.srt.entrypoints.http_server._global_state.tokenizer_manager.image_token_id,
-    # )
+    # Run system info printing in a separate thread
+    import threading
+    import time
+
+    def periodic_system_info():
+        time.sleep(10)  # Wait for 10 seconds initially
+        while True:
+            print_system_info()
+            time.sleep(10)  # Print every minute
+
+    threading.Thread(target=periodic_system_info, daemon=True).start()
     
     return api_server
 

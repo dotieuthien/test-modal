@@ -15,7 +15,7 @@ volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
 app = modal.App("example-vllm-openai-compatible")
 
-N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
+N_GPU = 2  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
 TOKEN = "super-secret-token"  # auth token. for production use, replace with a modal.Secret
 
 MINUTES = 60  # seconds
@@ -96,31 +96,37 @@ def serve():
         BaseModelPath(name=MODEL_NAME.split("/")[1], model_path=MODEL_NAME)
     ]
 
-    api_server.chat = lambda s: (
-        print_system_info(),
-        OpenAIServingChat(
-            engine,
-            model_config=model_config,
-            base_model_paths=base_model_paths,
-            chat_template=None,
-            response_role="assistant",
-            lora_modules=[],
-            prompt_adapters=[],
-            request_logger=request_logger,
-        )
-    )[1]
+    api_server.chat = lambda s: OpenAIServingChat(
+        engine,
+        model_config=model_config,
+        base_model_paths=base_model_paths,
+        chat_template=None,
+        response_role="assistant",
+        lora_modules=[],
+        prompt_adapters=[],
+        request_logger=request_logger,
+    )
 
-    api_server.completion = lambda s: (
-        print_system_info(),
-        OpenAIServingCompletion(
-            engine,
-            model_config=model_config,
-            base_model_paths=base_model_paths,
-            lora_modules=[],
-            prompt_adapters=[],
-            request_logger=request_logger,
-        )
-    )[1]
+    api_server.completion = lambda s: OpenAIServingCompletion(
+        engine,
+        model_config=model_config,
+        base_model_paths=base_model_paths,
+        lora_modules=[],
+        prompt_adapters=[],
+        request_logger=request_logger,
+    )
+    
+    # Run system info printing in a separate thread
+    import threading
+    import time
+
+    def periodic_system_info():
+        time.sleep(10)  # Wait for 10 seconds initially
+        while True:
+            print_system_info()
+            time.sleep(10)  # Print every minute
+
+    threading.Thread(target=periodic_system_info, daemon=True).start()
 
     return web_app
 
