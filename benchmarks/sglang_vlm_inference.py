@@ -20,15 +20,15 @@ sglang_image = (
 )
 
 MODELS_DIR = "/llama_models"
-MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
-MODEL_REVISION = "a7a06a1cc11b4514ce9edcde0e3ca1d16e5ff2fc"
+MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
+
 MODEL_CHAT_TEMPLATE = "qwen2-vl"
 
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
 app = modal.App("example-sglang-openai-compatible")
 
-N_GPU = 2  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
+N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
 # auth token. for production use, replace with a modal.Secret
 TOKEN = "super-secret-token"
 
@@ -38,7 +38,7 @@ HOURS = 60 * MINUTES
 
 @app.function(
     image=sglang_image,
-    gpu=f"A10G:{N_GPU}",
+    gpu=f"L4:{N_GPU}",
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
@@ -62,8 +62,6 @@ def serve():
         [
             "--model-path", MODELS_DIR + "/" + MODEL_NAME, 
             "--chat-template", MODEL_CHAT_TEMPLATE,
-            # "--tp", "2",
-            "--dp", "2",
         ]
     )
     pipe_finish_writer = None

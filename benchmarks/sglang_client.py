@@ -36,9 +36,6 @@ def get_completion(client, model_id, messages, args):
     completion_args = {
         k: v for k, v in completion_args.items() if v is not None
     }
-    
-    print("--------------------------------")
-    print(completion_args)
 
     try:
         response = client.chat.completions.create(**completion_args)
@@ -90,7 +87,7 @@ def main():
 
     # Completion parameters
     parser.add_argument("--max-tokens", type=int, default=None)
-    parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--top-p", type=float, default=0.9)
     parser.add_argument("--top-k", type=int, default=0)
     parser.add_argument("--frequency-penalty", type=float, default=0)
@@ -232,12 +229,31 @@ def main():
                     {"role": "assistant", "content": assistant_message}
                 )
     else:
-        image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
+        # image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
+        image_url = "https://inkythuatso.com/uploads/thumbnails/800/2023/03/hinh-anh-chuyen-tien-thanh-cong-vietcombank-5-07-12-30-12.jpg"
+        user_input = """
+            The image is a capture of a mobile banking app. Extract image and return results in JSON format as follows:  
+            {
+                "sender": "The sender's account names, not number, empty if not present", 
+                "receiver": "The receiver's account names, not number, empty if not present", 
+                "sender_bank_id": "The sender's bank account numbers, empty if not present", 
+                "receiver_bank_id": "The receiver's bank account numbers, empty if not present", 
+                "tran_id" :"The transaction ID, empty if not present", 
+                "bank_name": "The name of the bank or service provider, empty if not present", 
+                "value": "The transaction amount", 
+                "type": "The transaction type: expense when send money to others or income when receive money from others, always return income or expense", 
+                "category": "The transaction purpose, categorized as bills, entertainment, education, shopping, others if cannot be categorized, always return value", 
+                "time": "The transaction timestamp", 
+                "noted": "Notes or any additional details related to the transaction"
+            }  
+            
+            Only return the JSON and do not include any explanations. All in English.
+            """
         messages.append(
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": args.prompt},
+                    {"type": "text", "text": user_input},
                     {"type": "image_url", "image_url": {"url": image_url}},
                 ],
             }

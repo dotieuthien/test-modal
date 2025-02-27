@@ -36,9 +36,6 @@ def get_completion(client, model_id, messages, args):
         k: v for k, v in completion_args.items() if v is not None
     }
 
-    print("--------------------------------")
-    print(completion_args)
-
     try:
         response = client.chat.completions.create(**completion_args)
         return response
