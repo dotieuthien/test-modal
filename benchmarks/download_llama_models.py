@@ -3,8 +3,7 @@ import modal
 
 MODELS_DIR = "/llama_models"
 
-DEFAULT_NAME = "Qwen/Qwen2-VL-7B-Instruct"
-DEFAULT_REVISION = "a7a06a1cc11b4514ce9edcde0e3ca1d16e5ff2fc"
+DEFAULT_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
 
 GGUF_MODELS_NAME = "Qwen/Qwen2-7B-Instruct-GGUF"
 
@@ -77,4 +76,4 @@ def main(
     force_download: bool = False,
 ):
     download_model.remote(model_name, force_download)
-    download_gguf_model.remote(gguf_model_name, force_download)
+    # download_gguf_model.remote(gguf_model_name, force_download)

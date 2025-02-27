@@ -15,7 +15,7 @@ volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
 app = modal.App("example-vllm-openai-compatible")
 
-N_GPU = 2  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
+N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
 TOKEN = "super-secret-token"  # auth token. for production use, replace with a modal.Secret
 
 MINUTES = 60  # seconds
@@ -24,7 +24,7 @@ HOURS = 60 * MINUTES
 
 @app.function(
     image=vllm_image,
-    gpu=f"A10G:{N_GPU}",
+    gpu=f"L4:{N_GPU}",
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
