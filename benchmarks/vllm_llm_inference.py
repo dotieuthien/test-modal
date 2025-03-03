@@ -9,7 +9,6 @@ vllm_image = modal.Image.debian_slim(python_version="3.12").pip_install(
 
 MODELS_DIR = "/llama_models"
 MODEL_GGUF_NAME = "Qwen/Qwen2-7B-Instruct-GGUF/qwen2-7b-instruct-q5_k_m.gguf"
-MODEL_REVISION = "a7a06a1cc11b4514ce9edcde0e3ca1d16e5ff2fc"
 
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 

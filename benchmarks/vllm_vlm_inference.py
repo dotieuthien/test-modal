@@ -15,7 +15,6 @@ vllm_image = (
 
 MODELS_DIR = "/llama_models"
 MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
-MODEL_REVISION = "a7a06a1cc11b4514ce9edcde0e3ca1d16e5ff2fc"
 
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
