@@ -228,13 +228,34 @@ def main():
                     {"role": "assistant", "content": assistant_message}
                 )
     else:
-        image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
+        # image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
+        image_url = "https://inkythuatso.com/uploads/thumbnails/800/2023/03/hinh-anh-chuyen-tien-thanh-cong-vietcombank-5-07-12-30-12.jpg"
+        
+        import uuid
+        request_id = str(uuid.uuid4())
+        
+        user_input = "Request ID: " + request_id + """
+            Return the results in JSON format for:
+            {
+                "sender_name": "The sender name, not number, empty if not present", 
+                "receiver_name": "The receiver name or business name, not number, empty if not present", 
+                "sender_bank_account": "The sender's bank account numbers, empty if not present", 
+                "receiver_bank_account": "The receiver's bank account numbers, empty if not present", 
+                "bank_name": "The name of the bank or service provider, empty if not present",
+                "transaction_id" :"The transaction ID, empty if not present",
+                "value": "The transaction amount", 
+                "type": "The transaction type: expense when send money to others or income when receive money from others, always return income or expense", 
+                "category": "The transaction purpose, categorized as bills, entertainment, education, shopping, others if cannot be categorized, always return value", 
+                "time": "The transaction timestamp", 
+                "noted": "Notes or messages in the transaction"
+            } 
+            """
         messages.append(
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": args.prompt},
-                    # {"type": "image_url", "image_url": {"url": image_url}},
+                    {"type": "text", "text": user_input},
+                    {"type": "image_url", "image_url": {"url": image_url}},
                 ],
             }
         )

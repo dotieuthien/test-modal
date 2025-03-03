@@ -5,22 +5,21 @@ vllm_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-runtime-ubuntu22.04", add_python="3.12")
     .pip_install(
         "GPUtil",
-        "transformers==4.47.1",
-        "vllm==0.6.3post1", 
-        "fastapi[standard]==0.115.4",
+        "transformers>=4.48.2",
+        "vllm==v0.7.3", 
     )
     .run_commands("apt-get update")
     .run_commands("apt-get install -y nvtop")
 )
 
 MODELS_DIR = "/llama_models"
-MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
+MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
 
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
 app = modal.App("example-vllm-openai-compatible")
 
-N_GPU = 2  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
+N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
 TOKEN = "super-secret-token"  # auth token. for production use, replace with a modal.Secret
 
 MINUTES = 60  # seconds
@@ -29,7 +28,7 @@ HOURS = 60 * MINUTES
 
 @app.function(
     image=vllm_image,
-    gpu=f"A10G:{N_GPU}",
+    gpu=f"L4:{N_GPU}",
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
@@ -46,7 +45,9 @@ def serve():
     from vllm.entrypoints.openai.serving_completion import (
         OpenAIServingCompletion,
     )
-    from vllm.entrypoints.openai.serving_engine import BaseModelPath
+
+    from vllm.entrypoints.openai.serving_models import (BaseModelPath,
+                                                        OpenAIServingModels)
     from vllm.usage.usage_lib import UsageContext
     
     
@@ -100,24 +101,31 @@ def serve():
     base_model_paths = [
         BaseModelPath(name=MODEL_NAME.split("/")[1], model_path=MODEL_NAME)
     ]
-
-    api_server.chat = lambda s: OpenAIServingChat(
+    
+    openai_serving_models = OpenAIServingModels(
         engine,
         model_config=model_config,
         base_model_paths=base_model_paths,
-        chat_template=None,
-        response_role="assistant",
         lora_modules=[],
         prompt_adapters=[],
+    )
+    
+    api_server.models = lambda s: openai_serving_models
+
+    api_server.chat = lambda s: OpenAIServingChat(
+        engine,
+        model_config,
+        openai_serving_models,
+        chat_template=None,
+        chat_template_content_format="auto",
+        response_role="assistant",
         request_logger=request_logger,
     )
 
     api_server.completion = lambda s: OpenAIServingCompletion(
         engine,
-        model_config=model_config,
-        base_model_paths=base_model_paths,
-        lora_modules=[],
-        prompt_adapters=[],
+        model_config,
+        openai_serving_models,
         request_logger=request_logger,
     )
     
