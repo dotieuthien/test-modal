@@ -231,7 +231,6 @@ def main():
     else:
         # image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
         image_url = "https://inkythuatso.com/uploads/thumbnails/800/2023/03/hinh-anh-chuyen-tien-thanh-cong-vietcombank-5-07-12-30-12.jpg"
-        # image_url = "https://img.otofun.net/upload/v6/2019/02/11/2245193-34721-52c2df9d03cee190b8df-7ldcxnqnx6jd5k7zbvld.jpg"
         
         import uuid
         request_id = str(uuid.uuid4())
