@@ -144,7 +144,7 @@ class VRAG:
         self, query: list[ChatCompletionMessageParam]
     ) -> AsyncGenerator[ServerSentEvent, None]:
         stream = self.openai.chat.completions.create(
-            model="gpt-4o", messages=query, stream=True
+            model="gpt-4o-mini", messages=query, stream=True
         )
 
         for chunk in stream:
