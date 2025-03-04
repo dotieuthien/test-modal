@@ -144,6 +144,76 @@ def serve():
     return web_app
 
 
+@app.function(volumes={TRACE_DIR: traces}, **config)
+def profile(
+    function,
+    label: str = None,
+    steps: int = 3,
+    schedule=None,
+    record_shapes: bool = False,
+    profile_memory: bool = False,
+    with_stack: bool = False,
+    print_rows: int = 0,
+    **kwargs,
+):
+    from uuid import uuid4
+
+    if isinstance(function, str):
+        try:
+            function = app.registered_functions[function]
+        except KeyError:
+            raise ValueError(f"Function {function} not found")
+    function_name = function.tag
+
+    output_dir = (
+        TRACE_DIR
+        / (function_name + (f"_{label}" if label else ""))
+        / str(uuid4())
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if schedule is None:
+        if steps < 3:
+            raise ValueError(
+                "Steps must be at least 3 when using default schedule"
+            )
+        schedule = {"wait": 1, "warmup": 1, "active": steps - 2, "repeat": 0}
+
+    schedule = torch.profiler.schedule(**schedule)
+
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ],
+        schedule=schedule,
+        record_shapes=record_shapes,
+        profile_memory=profile_memory,
+        with_stack=with_stack,
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(output_dir),
+    ) as prof:
+        for _ in range(steps):
+            function.local(**kwargs)  # <-- here we wrap the target Function
+            prof.step()
+
+    if print_rows:
+        print(
+            prof.key_averages().table(
+                sort_by="cuda_time_total", row_limit=print_rows
+            )
+        )
+
+    trace_path = sorted(
+        output_dir.glob("**/*.pt.trace.json"),
+        key=lambda pth: pth.stat().st_mtime,
+        reverse=True,
+    )[0]
+
+    print(f"trace saved to {trace_path.relative_to(TRACE_DIR)}")
+
+    return trace_path.read_text(), trace_path.relative_to(TRACE_DIR)
+
+
 def get_model_config(engine):
     import asyncio
 
