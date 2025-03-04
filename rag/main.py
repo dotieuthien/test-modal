@@ -106,5 +106,4 @@ def serve():
 
         return EventSourceResponse(event_generator())
 
-    # web_app.mount("/", StaticFiles(directory="/assets", html=True))
     return web_app

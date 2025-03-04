@@ -25,34 +25,34 @@ class VRAG:
     ) -> AsyncGenerator[ServerSentEvent, None]:
         results = await self.search(collection_name, query, count)
 
-        yield ServerSentEvent(
-            data=json.dumps(
-                {
-                    "results": [
-                        {
-                            "score": result.score,
-                            "image": result.payload["image"],
-                            "page": result.payload["page"],
-                            "name": result.payload["name"],
-                        }
-                        for result in results
-                    ]
-                }
-            ),
-            event="sources",
-        )
+        # yield ServerSentEvent(
+        #     data=json.dumps(
+        #         {
+        #             "results": [
+        #                 {
+        #                     "score": result.score,
+        #                     "image": result.payload["image"],
+        #                     "page": result.payload["page"],
+        #                     "name": result.payload["name"],
+        #                 }
+        #                 for result in results
+        #             ]
+        #         }
+        #     ),
+        #     event="sources",
+        # )
 
         augmented = await self.augment(results, query)
 
         async for completion in self.generate(augmented):
             yield completion
 
-        imgs: list[str] = [result.payload["image"] for result in results]
-        heatmaps = self.colpali.generate_heatmaps.remote(imgs, query)
-        yield ServerSentEvent(
-            data=json.dumps(heatmaps),
-            event="heatmaps",
-        )
+        # imgs: list[str] = [result.payload["image"] for result in results]
+        # heatmaps = self.colpali.generate_heatmaps.remote(imgs, query)
+        # yield ServerSentEvent(
+        #     data=json.dumps(heatmaps),
+        #     event="heatmaps",
+        # )
 
     # index data
     async def add_pdf(
