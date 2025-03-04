@@ -4,9 +4,25 @@ import modal
 image = (
     modal.Image.from_registry(
         "nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.10")
+    .apt_install(
+        "git", "build-essential", "cmake", "curl", "libcurl4-openssl-dev"
+    )
+    .run_commands(
+        "apt install -y zlib1g-dev libxml2-dev"
+    )
     .pip_install(
         "torch",
-        "triton"
+    )
+    .run_commands(
+        "git clone https://github.com/triton-lang/triton.git"
+    )
+    .run_commands(
+        "pip install ninja cmake wheel pybind11",
+        "cd triton && pip install -e python",
+    )
+    .pip_install(
+        "matplotlib",
+        "pandas"
     )
 )
 
@@ -25,11 +41,12 @@ def modal_function():
     import triton
     import triton.language as tl
     from triton.runtime import driver
+    import time
 
     # Initialize CUDA and get the first available device
     torch.cuda.init()
     torch.cuda.set_device(0)  # Set to first GPU
-    DEVICE = torch.cuda.current_device()  # This will return an integer
+    DEVICE = triton.runtime.driver.active.get_active_torch_device()
 
     def is_hip():
         return triton.runtime.driver.active.get_current_target().backend == "hip"
@@ -84,7 +101,7 @@ def modal_function():
             output_ptrs = output_row_start_ptr + col_offsets
             tl.store(output_ptrs, softmax_output, mask=mask)
 
-    properties = driver.active.utils.get_device_properties(DEVICE)
+    properties = driver.active.utils.get_device_properties(DEVICE.index)
     NUM_SM = properties["multiprocessor_count"]
     NUM_REGS = properties["max_num_regs"]
     SIZE_SMEM = properties["max_shared_mem"]
@@ -147,10 +164,39 @@ def modal_function():
         return y
 
     torch.manual_seed(0)
-    x = torch.randn(1823, 781, device=f"cuda:{DEVICE}")
+    x = torch.randn(1823, 781, device=DEVICE)
     y_triton = softmax(x)
     y_torch = torch.softmax(x, axis=1)
     assert torch.allclose(y_triton, y_torch), (y_triton, y_torch)
+    
+    @triton.testing.perf_report(
+        triton.testing.Benchmark(
+            x_names=['N'],  # argument names to use as an x-axis for the plot
+            x_vals=[128 * i for i in range(2, 100)],  # different possible values for `x_name`
+            line_arg='provider',  # argument name whose value corresponds to a different line in the plot
+            line_vals=['triton', 'torch'],  # possible values for `line_arg``
+            line_names=[
+                "Triton",
+                "Torch",
+            ],  # label name for the lines
+            styles=[('blue', '-'), ('green', '-')],  # line styles
+            ylabel="GB/s",  # label name for the y-axis
+            plot_name="softmax-performance",  # name for the plot. Used also as a file name for saving the plot.
+            args={'M': 4096},  # values for function arguments not in `x_names` and `y_name`
+        ))
+    def benchmark(M, N, provider):
+        x = torch.randn(M, N, device=DEVICE, dtype=torch.float32)
+        stream = getattr(torch, DEVICE.type).Stream()
+        getattr(torch, DEVICE.type).set_stream(stream)
+        if provider == 'torch':
+            ms = triton.testing.do_bench(lambda: torch.softmax(x, axis=-1))
+        if provider == 'triton':
+            ms = triton.testing.do_bench(lambda: softmax(x))
+        gbps = lambda ms: 2 * x.numel() * x.element_size() * 1e-9 / (ms * 1e-3)
+        return gbps(ms)
+
+
+    benchmark.run(show_plots=True, print_data=True)
 
 
 @app.local_entrypoint()
