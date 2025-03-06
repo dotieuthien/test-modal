@@ -1,18 +1,24 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from typing import Any
+from typing import Any, List
 
 
 class RetrievalResult:
-    def __init__(self, score: float, payload: dict[str, Any]):
+    def __init__(self, id: int, score: float, payload: dict[str, Any]):
+        self.id = id
         self.score = score
         self.payload = payload
         
 
-class CollectionInfo:
-    def __init__(self, collection_name: str, description: str):
-        self.collection_name = collection_name
-        self.description = description
+def deduplicate(results: List[RetrievalResult]) -> List[RetrievalResult]:
+    result_set = set()
+    deduplicated_results = []
+    for result in results:
+        if result.payload["page"] not in result_set:
+            result_set.add(result.payload["page"])
+            deduplicated_results.append(result)
+            
+    return list(deduplicated_results)
 
 
 class BaseVectorDB(ABC):

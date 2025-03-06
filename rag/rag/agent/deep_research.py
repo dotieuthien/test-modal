@@ -7,7 +7,7 @@ from sse_starlette.sse import ServerSentEvent
 from rag.agent.base import RAGAgent
 from rag.llm.base import BaseLLM
 from rag.embedding.base import BaseEmbedding
-from rag.vector_db.base import BaseVectorDB, RetrievalResult
+from rag.vector_db.base import BaseVectorDB, RetrievalResult, deduplicate
 from rag.agent.prompts import SUB_QUERY_PROMPT, REFLECTION_PROMPT
 
 
@@ -76,16 +76,22 @@ class DeepResearch(RAGAgent):
             messages=messages
         )
         response_content = chat_response.content
+        
+        print(response_content)
 
         return self.llm.literal_eval(response_content)
 
-    async def _search_image_from_vector_db(self, query: str) -> list[RetrievalResult]:
+    async def _search_image_from_vector_db(
+        self, 
+        query: str,
+        collection_name: str
+    ) -> list[RetrievalResult]:
         if self.multi_modal_embedding_model is None:
             return []
 
         query_vector = await self.multi_modal_embedding_model.embed_queries.remote.aio([query])
         results = await self.vector_db_client.search_collection(
-            collection_name="test",
+            collection=collection_name,
             query_vector=query_vector,
             count=3
         )
@@ -114,12 +120,17 @@ class DeepResearch(RAGAgent):
     #         final_results.extend(result)
     #     return final_results
 
-    async def retrieve(self, query: str, **kwargs):
+    async def retrieve(
+        self, 
+        query: str, 
+        collection_name: str, 
+        **kwargs
+    ):
         max_iter = kwargs.get("max_iter", 3)
         all_search_results = []
         all_sub_queries = []
 
-        sub_queries = self._generate_sub_queries(query)
+        sub_queries = await self._generate_sub_queries(query)
         if not sub_queries or len(sub_queries) == 0:
             print("<think> No sub-queries generated. Stop the search.</think>\n")
             return [], []
@@ -135,17 +146,18 @@ class DeepResearch(RAGAgent):
             search_result_from_internet = []  # TODO: implement internet search
 
             search_tasks = [
-                self._search_image_from_vector_db(sub_query)
+                self._search_image_from_vector_db(sub_query, collection_name)
                 for sub_query in sub_gap_queries
             ]
 
             search_results = await asyncio.gather(*search_tasks)
-
-            search_result_from_vector_db.extend(search_results)
-            # search_result_from_vector_db = deduplicate(search_result_from_vector_db)
+            for search_result in search_results:
+                search_result_from_vector_db.extend(search_result)
+                
+            search_result_from_vector_db = deduplicate(search_result_from_vector_db)
             all_search_results.extend(search_result_from_vector_db)
 
-            if i < max_iter - 1:
+            if i == max_iter - 1:
                 print(
                     "<think> Exceeded the maximum number of iterations. Stop the search.</think>\n")
                 break
@@ -153,7 +165,7 @@ class DeepResearch(RAGAgent):
             print(
                 f"<think> Reflecting on the search results and generating new sub-queries...</think>\n")
 
-            sub_gap_queries = self._generate_sub_gap_queries(
+            sub_gap_queries = await self._generate_sub_gap_queries(
                 query, all_sub_queries, all_search_results)
             if not sub_gap_queries or len(sub_gap_queries) == 0:
                 print(
@@ -164,7 +176,7 @@ class DeepResearch(RAGAgent):
                 f"<think> Generate {len(sub_gap_queries)} new sub-queries: {sub_gap_queries}</think>\n")
             all_sub_queries.extend(sub_gap_queries)
 
-        # all_search_results = deduplicate(all_search_results)
+        all_search_results = deduplicate(all_search_results)
 
         return all_search_results, all_sub_queries
 
@@ -200,8 +212,15 @@ class DeepResearch(RAGAgent):
         async for completion in self.llm.stream_chat(messages=augmented):
             yield completion
 
-    async def process(self, query: str, **kwargs) -> AsyncGenerator[ServerSentEvent, None]:
-        all_search_results, all_sub_queries = await self.retrieve(query, **kwargs)
+    async def process(
+        self, 
+        query: str,
+        collection_name: str, 
+        **kwargs
+    ) -> AsyncGenerator[ServerSentEvent, None]:
+        
+        all_search_results, all_sub_queries = await self.retrieve(query, collection_name, **kwargs)
+
         yield ServerSentEvent(
             data=json.dumps(
                 {

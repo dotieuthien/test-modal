@@ -1,14 +1,7 @@
 import uuid
-from pydantic import BaseModel
-from typing import Any
 
 from qdrant_client import AsyncQdrantClient, models
-from rag.vector_db.base import BaseVectorDB
-
-class Result(BaseModel):
-    id: int | str
-    score: float
-    payload: dict[str, Any]
+from rag.vector_db.base import BaseVectorDB, RetrievalResult
 
 
 class InMemoryQdrant(BaseVectorDB):
@@ -37,12 +30,16 @@ class InMemoryQdrant(BaseVectorDB):
 
     async def search_collection(
         self, collection: str, query_vector: list[list[float]], count: int
-    ) -> list[Result]:
+    ) -> list[RetrievalResult]:
         result = await self.client.query_points(
             collection, query=query_vector, limit=count
         )
         return [
-            Result(id=point.id, score=point.score, payload=point.payload or {})
+            RetrievalResult(
+                id=point.id, 
+                score=point.score, 
+                payload=point.payload or {}
+            )
             for point in result.points
         ]
 

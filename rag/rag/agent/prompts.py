@@ -22,7 +22,8 @@ Provide your response in list of str format:
 """
 
 REFLECTION_PROMPT = """
-Determine whether additional search queries are needed based on the original query, previous sub queries, and all retrieved document chunks. If further research is required, provide a Python list of up to 3 search queries. If no further research is required, return an empty list.
+Determine whether additional search queries are needed based on the original query, previous sub queries, and all retrieved document chunks.
+Do summarize the retrieved document chunks. If further research is required, provide a Python list of up to 3 search queries. If no further research is required, return an empty list.
 If the original query is to write a report, then you prefer to generate some further queries, instead return an empty list.
 
 Original Query: {original_query}

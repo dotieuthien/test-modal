@@ -37,12 +37,13 @@ def serve():
     from fastapi.staticfiles import StaticFiles
     from fastapi.middleware.cors import CORSMiddleware
 
-    from rag.agent.vision_rag import VRAG
+    # from rag.agent.vision_rag import VRAG
     from rag.vector_db.qdrant_client import InMemoryQdrant
     from rag.agent.deep_research import DeepResearch
     from rag.llm.openai_llm import OpenAILLM
 
     import gradio as gr
+    import time
 
     class SearchRequest(BaseModel):
         query: str
@@ -52,11 +53,6 @@ def serve():
     web_app = FastAPI()
 
     qdrant = InMemoryQdrant()
-
-    vision_rag = VRAG(
-        colpali=colpali, 
-        qdrant=qdrant
-    )
 
     deep_research = DeepResearch(
         llm=OpenAILLM(),
@@ -92,7 +88,7 @@ def serve():
                     )
                 )
                 try:
-                    async for state in vision_rag.add_pdf(*byte_file):
+                    async for state in deep_research.add_pdf(*byte_file):
                         yield state
                 except Exception as e:
                     yield json.dumps({"error": str(e)})
@@ -116,7 +112,7 @@ def serve():
                     )
                 )
                 return
-            async for stage in vision_rag.run_vrag(str(query.instance_id), query.query, query.count):
+            async for stage in deep_research.process(str(query.instance_id), query.query, query.count):
                 yield stage
 
         return EventSourceResponse(event_generator())
@@ -125,7 +121,7 @@ def serve():
         if pdf_file is None:
             return "Please select a PDF file to upload", None
 
-        collection_id = str(uuid.uuid4())
+        collection_id = "demo collection"
         # Gradio provides the file path directly
         with open(pdf_file.name, 'rb') as f:
             pdf_bytes = f.read()
@@ -133,7 +129,7 @@ def serve():
 
         messages = ["Starting to index PDF..."]
         try:
-            async for state in vision_rag.add_pdf(collection_id, filename, pdf_bytes):
+            async for state in deep_research.add_pdf(collection_id, filename, pdf_bytes):
                 if isinstance(state, ServerSentEvent):
                     data = json.loads(state.data)
                     if "message" in data:
@@ -152,9 +148,8 @@ def serve():
         messages = []
         images = []
         results_data = []  # For DataFrame
-        current_message = ""
 
-        async for event in vision_rag.run_vrag(collection_id, query):
+        async for event in deep_research.process(query, collection_id):
             if isinstance(event, ServerSentEvent):
                 data = json.loads(event.data)
                 if event.event == "sources":
@@ -176,23 +171,18 @@ def serve():
                             result["page"],
                             result["name"]
                         ])
-                    yield (
-                        current_message,
-                        images,
-                        results_data  # Will be displayed as DataFrame
-                    )
 
-                try:
-                    current_message += data["chunk"]
-                    yield (
-                        current_message,
-                        images,
-                        results_data
-                    )
-                except:
-                    pass
+                if "chunk" in data:
+                    messages.append(data["chunk"])
 
-    with gr.Blocks(title="Vision RAG Demo", css=".gradio-container { width: 1200px !important; }") as demo:
+                response_text = "".join(messages)
+                yield (
+                    response_text,
+                    images,
+                    results_data
+                )
+
+    with gr.Blocks(title="Vision RAG Demo") as demo:
         gr.Markdown("# Vision RAG Demo")
         gr.Markdown("Upload a PDF and ask questions about its contents.")
 
@@ -240,7 +230,7 @@ def serve():
                         response_output = gr.Textbox(
                             label="Response",
                             lines=10,
-                            interactive=False
+                            interactive=False,
                         )
                     with gr.Column():
                         image_output = gr.Gallery(
@@ -258,7 +248,8 @@ def serve():
                         response_output,
                         image_output,
                         score_output
-                    ]
+                    ],
+                    show_progress=True
                 )
 
     return gr.mount_gradio_app(web_app, demo, path="/")
