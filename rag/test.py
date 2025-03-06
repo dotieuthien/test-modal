@@ -52,12 +52,7 @@ def serve():
     web_app = FastAPI()
 
     qdrant = InMemoryQdrant()
-
-    vision_rag = VRAG(
-        colpali=colpali, 
-        qdrant=qdrant
-    )
-
+    
     deep_research = DeepResearch(
         llm=OpenAILLM(),
         vector_db_client=qdrant,
@@ -92,7 +87,7 @@ def serve():
                     )
                 )
                 try:
-                    async for state in vision_rag.add_pdf(*byte_file):
+                    async for state in deep_research.add_pdf(*byte_file):
                         yield state
                 except Exception as e:
                     yield json.dumps({"error": str(e)})
