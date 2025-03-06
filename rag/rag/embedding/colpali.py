@@ -2,7 +2,7 @@ import os
 from typing import AsyncGenerator, cast
 import modal
 
-from vrag.image import colpali_image
+from rag.image import colpali_image
 from modal_app import app
 
 

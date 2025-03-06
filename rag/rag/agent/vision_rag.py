@@ -9,9 +9,9 @@ from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from sse_starlette.sse import ServerSentEvent
 
-from vrag.colpali import ColPaliModel
-from vrag.qdrant_client import InMemoryQdrant, Result
-from vrag.pdf_to_image import images_from_pdf_bytes
+from rag.embedding.colpali import ColPaliModel
+from rag.vector_db.qdrant_client import InMemoryQdrant, Result
+from rag.tools.pdf_to_image import images_from_pdf_bytes
 
 
 class VRAG:

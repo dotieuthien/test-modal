@@ -1,4 +1,4 @@
 import modal
 
 
-app = modal.App("example-vision-rag")
+app = modal.App("example-rag")

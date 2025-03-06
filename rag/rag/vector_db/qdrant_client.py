@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Any
 
 from qdrant_client import AsyncQdrantClient, models
-
+from rag.vector_db.base import BaseVectorDB
 
 class Result(BaseModel):
     id: int | str
@@ -11,7 +11,7 @@ class Result(BaseModel):
     payload: dict[str, Any]
 
 
-class InMemoryQdrant:
+class InMemoryQdrant(BaseVectorDB):
     def __init__(self) -> None:
         self.client = AsyncQdrantClient(":memory:")
 
