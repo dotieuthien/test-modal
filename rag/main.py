@@ -18,7 +18,7 @@ colpali = ColPaliModel()
 @app.function(
     image=web_image,
     concurrency_limit=1,
-    container_idle_timeout=300,
+    container_idle_timeout=600,
     timeout=600,
     allow_concurrent_inputs=10,
     volumes={MODELS_DIR: volume},

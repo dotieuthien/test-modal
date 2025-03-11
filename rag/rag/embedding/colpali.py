@@ -59,7 +59,7 @@ def create_stringlist_dataset_class(string_list: list[str]):
     secrets=[modal.Secret.from_name("huggingface")],
     cpu=4,
     timeout=600,
-    container_idle_timeout=300,
+    container_idle_timeout=600,
     image=colpali_image,
 )
 class ColPaliModel:
