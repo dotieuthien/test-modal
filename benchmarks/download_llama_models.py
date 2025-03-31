@@ -3,7 +3,8 @@ import modal
 
 MODELS_DIR = "/llama_models"
 
-DEFAULT_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
+# DEFAULT_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
+DEFAULT_NAME = "Qwen/Qwen2.5-VL-32B-Instruct"
 
 GGUF_MODELS_NAME = "Qwen/Qwen2-7B-Instruct-GGUF"
 
@@ -30,8 +31,13 @@ app = modal.App(
 )
 
 
-@app.function(volumes={MODELS_DIR: volume}, timeout=4 * HOURS)
-def download_model(model_name, force_download=False):
+@app.function(
+    volumes={MODELS_DIR: volume}, 
+    timeout=4 * HOURS)
+def download_model(
+    model_name, 
+    force_download=False
+):
     from huggingface_hub import snapshot_download
 
     volume.reload()
