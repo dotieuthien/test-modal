@@ -5,7 +5,7 @@ sglang_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
     .pip_install(  # add sglang and some Python dependencies
         "GPUtil",
-        "transformers==4.47.1",
+        # "transformers==4.47.1",
         "numpy<2",
         "fastapi[standard]==0.115.4",
         "pydantic==2.9.2",
@@ -20,7 +20,7 @@ sglang_image = (
 )
 
 MODELS_DIR = "/llama_models"
-MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
+MODEL_NAME = "Qwen/Qwen2.5-VL-32B-Instruct"
 
 MODEL_CHAT_TEMPLATE = "qwen2-vl"
 
@@ -38,7 +38,7 @@ HOURS = 60 * MINUTES
 
 @app.function(
     image=sglang_image,
-    gpu=f"L4:{N_GPU}",
+    gpu=f"A100-80GB:{N_GPU}",
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
