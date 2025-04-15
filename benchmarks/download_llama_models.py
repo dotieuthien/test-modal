@@ -3,8 +3,7 @@ import modal
 
 MODELS_DIR = "/llama_models"
 
-# DEFAULT_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
-DEFAULT_NAME = "Qwen/Qwen2.5-VL-32B-Instruct"
+DEFAULT_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
 
 GGUF_MODELS_NAME = "Qwen/Qwen2-7B-Instruct-GGUF"
 

@@ -90,7 +90,7 @@ def serve():
     engine_args = AsyncEngineArgs(
         model=MODELS_DIR + "/" + MODEL_NAME,
         gpu_memory_utilization=0.90,
-        max_model_len=4096,
+        max_model_len=8096,
         enforce_eager=False,  # capture the graph for faster inference, but slower cold starts (30s > 20s)
     )
 

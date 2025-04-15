@@ -20,7 +20,7 @@ sglang_image = (
 )
 
 MODELS_DIR = "/llama_models"
-MODEL_NAME = "Qwen/Qwen2.5-VL-32B-Instruct"
+MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
 
 MODEL_CHAT_TEMPLATE = "qwen2-vl"
 

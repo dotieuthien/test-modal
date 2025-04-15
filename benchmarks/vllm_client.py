@@ -31,6 +31,8 @@ def get_completion(client, model_id, messages, args):
         "temperature": args.temperature,
         "top_p": args.top_p,
     }
+    
+    print(completion_args)
 
     completion_args = {
         k: v for k, v in completion_args.items() if v is not None
