@@ -6,15 +6,14 @@ vllm_image = (
     .pip_install(
         "GPUtil",
         "transformers>=4.48.2",
-        # "vllm==v0.7.3", 
-        "vllm==v0.8.0",
+        "vllm==v0.8.3",
     )
     .run_commands("apt-get update")
     .run_commands("apt-get install -y nvtop")
 )
 
 MODELS_DIR = "/llama_models"
-MODEL_NAME = "Qwen/Qwen2.5-VL-32B-Instruct"
+MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
 
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
@@ -29,7 +28,7 @@ HOURS = 60 * MINUTES
 
 @app.function(
     image=vllm_image,
-    gpu=f"A100-80GB:{N_GPU}",
+    gpu=f"L4:{N_GPU}",
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
