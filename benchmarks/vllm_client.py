@@ -31,6 +31,8 @@ def get_completion(client, model_id, messages, args):
         "temperature": args.temperature,
         "top_p": args.top_p,
     }
+    
+    print(completion_args)
 
     completion_args = {
         k: v for k, v in completion_args.items() if v is not None
@@ -280,7 +282,7 @@ def main():
 
 
 if __name__ == "__main__":
-    for i in range(10):
+    for i in range(1):
         start_time = time.time()
         main()
         end_time = time.time()

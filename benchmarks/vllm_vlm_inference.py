@@ -2,11 +2,11 @@ import modal
 
 
 vllm_image = (
-    modal.Image.from_registry("nvidia/cuda:12.4.0-runtime-ubuntu22.04", add_python="3.12")
+    modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
     .pip_install(
         "GPUtil",
         "transformers>=4.48.2",
-        "vllm==v0.7.3", 
+        "vllm==v0.8.3",
     )
     .run_commands("apt-get update")
     .run_commands("apt-get install -y nvtop")
@@ -51,6 +51,11 @@ def serve():
     from vllm.usage.usage_lib import UsageContext
     
     
+    # # set export VLLM_USE_V1=1 in python script
+    # import os
+    # os.environ["VLLM_USE_V1"] = "1"
+    
+    
     def print_system_info():
         import psutil
         import GPUtil
@@ -84,7 +89,6 @@ def serve():
 
     engine_args = AsyncEngineArgs(
         model=MODELS_DIR + "/" + MODEL_NAME,
-        tensor_parallel_size=N_GPU,
         gpu_memory_utilization=0.90,
         max_model_len=8096,
         enforce_eager=False,  # capture the graph for faster inference, but slower cold starts (30s > 20s)
@@ -129,17 +133,20 @@ def serve():
         request_logger=request_logger,
     )
     
-    # Run system info printing in a separate thread
-    import threading
-    import time
+    web_app.state.enable_server_load_tracking = True
+    web_app.state.server_load_metrics = 0
+    
+    # # Run system info printing in a separate thread
+    # import threading
+    # import time
 
-    def periodic_system_info():
-        time.sleep(10)  # Wait for 10 seconds initially
-        while True:
-            print_system_info()
-            time.sleep(10)  # Print every minute
+    # def periodic_system_info():
+    #     time.sleep(10)  # Wait for 10 seconds initially
+    #     while True:
+    #         print_system_info()
+    #         time.sleep(10)  # Print every minute
 
-    threading.Thread(target=periodic_system_info, daemon=True).start()
+    # threading.Thread(target=periodic_system_info, daemon=True).start()
 
     return web_app
 

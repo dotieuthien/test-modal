@@ -30,8 +30,13 @@ app = modal.App(
 )
 
 
-@app.function(volumes={MODELS_DIR: volume}, timeout=4 * HOURS)
-def download_model(model_name, force_download=False):
+@app.function(
+    volumes={MODELS_DIR: volume}, 
+    timeout=4 * HOURS)
+def download_model(
+    model_name, 
+    force_download=False
+):
     from huggingface_hub import snapshot_download
 
     volume.reload()
