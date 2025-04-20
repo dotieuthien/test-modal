@@ -230,7 +230,7 @@ def main():
                 )
     else:
         # image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
-        image_url = "https://inkythuatso.com/uploads/thumbnails/800/2023/03/hinh-anh-chuyen-tien-thanh-cong-vietcombank-5-07-12-30-12.jpg"
+        image_url = "https://digibankm5.vietcombank.com.vn/get_file/ibomni/html/hdsd-ib/media/screenshot/vi/1-chuyen-tien/3-chuyen-tien-nhanh-247/3-1-chuyen-tien-nhanh-24-7-qua-tai-khoan/4.png"
         
         import uuid
         request_id = str(uuid.uuid4())

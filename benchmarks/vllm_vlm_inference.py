@@ -5,7 +5,6 @@ vllm_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
     .pip_install(
         "GPUtil",
-        "transformers>=4.48.2",
         "vllm==v0.8.3",
     )
     .run_commands("apt-get update")

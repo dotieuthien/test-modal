@@ -5,13 +5,13 @@ sglang_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
     .pip_install(  # add sglang and some Python dependencies
         "GPUtil",
-        # "transformers==4.47.1",
         "numpy<2",
         "fastapi[standard]==0.115.4",
         "pydantic==2.9.2",
         "starlette==0.41.2",
         "torch==2.5.1",
-        "sglang[all]>=0.4.3",
+        "vllm==0.7.2",
+        "sglang[all]>=0.4.5.post1",
         # as per sglang website: https://sgl-project.github.io/start/install.html
         extra_options="--find-links https://flashinfer.ai/whl/cu124/torch2.5/flashinfer-python",
     )
@@ -38,7 +38,7 @@ HOURS = 60 * MINUTES
 
 @app.function(
     image=sglang_image,
-    gpu=f"A100-80GB:{N_GPU}",
+    gpu=f"L4:{N_GPU}",
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
@@ -64,7 +64,7 @@ def serve():
             "--chat-template", MODEL_CHAT_TEMPLATE,
         ]
     )
-    pipe_finish_writer = None
+
     tokenizer_manager, scheduler_info = _launch_subprocesses(server_args=server_args)
     set_global_state(
         _GlobalState(
@@ -73,31 +73,32 @@ def serve():
         )
     )
     
+    api_server.server_args = server_args
     
-    def print_system_info():
-        import psutil
-        import GPUtil
+    # def print_system_info():
+    #     import psutil
+    #     import GPUtil
 
-        # Memory info
-        mem = psutil.virtual_memory()
-        print(f"Memory: Total={mem.total / (1024**3):.2f}GB, Available={mem.available / (1024**3):.2f}GB")
+    #     # Memory info
+    #     mem = psutil.virtual_memory()
+    #     print(f"Memory: Total={mem.total / (1024**3):.2f}GB, Available={mem.available / (1024**3):.2f}GB")
         
-        # GPU info
-        gpus = GPUtil.getGPUs()
-        for i, gpu in enumerate(gpus):
-            print(f"GPU {i}: {gpu.name}, Memory Total={gpu.memoryTotal}MB, Memory Used={gpu.memoryUsed}MB")
+    #     # GPU info
+    #     gpus = GPUtil.getGPUs()
+    #     for i, gpu in enumerate(gpus):
+    #         print(f"GPU {i}: {gpu.name}, Memory Total={gpu.memoryTotal}MB, Memory Used={gpu.memoryUsed}MB")
 
     # Run system info printing in a separate thread
-    import threading
-    import time
+    # import threading
+    # import time
 
-    def periodic_system_info():
-        time.sleep(10)  # Wait for 10 seconds initially
-        while True:
-            print_system_info()
-            time.sleep(10)  # Print every minute
+    # def periodic_system_info():
+    #     time.sleep(10)  # Wait for 10 seconds initially
+    #     while True:
+    #         print_system_info()
+    #         time.sleep(10)  # Print every minute
 
-    threading.Thread(target=periodic_system_info, daemon=True).start()
+    # threading.Thread(target=periodic_system_info, daemon=True).start()
     
     return api_server
 
