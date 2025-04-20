@@ -2,9 +2,11 @@
 
 import argparse
 import time
-
+import base64
+import io
 import modal
 from openai import OpenAI
+from PIL import Image
 
 
 class Colors:
@@ -230,7 +232,12 @@ def main():
                 )
     else:
         # image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
-        image_url = "https://digibankm5.vietcombank.com.vn/get_file/ibomni/html/hdsd-ib/media/screenshot/vi/1-chuyen-tien/3-chuyen-tien-nhanh-247/3-1-chuyen-tien-nhanh-24-7-qua-tai-khoan/4.png"
+        image_path = "/Users/dotieuthien/Documents/rnd/test-modal/benchmarks/images/test/3.png"
+        image = Image.open(image_path).convert("RGB")
+        image_bytes = io.BytesIO()
+        image.save(image_bytes, format="PNG")
+        base64_image = base64.b64encode(image_bytes.getvalue()).decode(
+            "utf-8")
         
         import uuid
         request_id = str(uuid.uuid4())
@@ -256,7 +263,7 @@ def main():
                 "role": "user",
                 "content": [
                     {"type": "text", "text": user_input},
-                    {"type": "image_url", "image_url": {"url": image_url}},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
                 ],
             }
         )

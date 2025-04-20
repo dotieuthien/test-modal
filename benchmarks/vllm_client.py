@@ -4,6 +4,9 @@ import argparse
 import time
 import modal
 from openai import OpenAI
+from PIL import Image
+import base64
+import io
 
 
 class Colors:
@@ -31,8 +34,6 @@ def get_completion(client, model_id, messages, args):
         "temperature": args.temperature,
         "top_p": args.top_p,
     }
-    
-    print(completion_args)
 
     completion_args = {
         k: v for k, v in completion_args.items() if v is not None
@@ -231,7 +232,13 @@ def main():
                 )
     else:
         # image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
-        image_url = "https://digibankm5.vietcombank.com.vn/get_file/ibomni/html/hdsd-ib/media/screenshot/vi/1-chuyen-tien/3-chuyen-tien-nhanh-247/3-1-chuyen-tien-nhanh-24-7-qua-tai-khoan/4.png"
+        image_path = "/Users/dotieuthien/Documents/rnd/test-modal/benchmarks/images/test/3.png"
+        image = Image.open(image_path).convert("RGB")
+        image_bytes = io.BytesIO()
+        image.save(image_bytes, format="PNG")
+        base64_image = base64.b64encode(image_bytes.getvalue()).decode(
+            "utf-8")
+        
         
         import uuid
         request_id = str(uuid.uuid4())
@@ -257,7 +264,7 @@ def main():
                 "role": "user",
                 "content": [
                     {"type": "text", "text": user_input},
-                    {"type": "image_url", "image_url": {"url": image_url}},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
                 ],
             }
         )
@@ -282,7 +289,7 @@ def main():
 
 
 if __name__ == "__main__":
-    for i in range(1):
+    for i in range(10):
         start_time = time.time()
         main()
         end_time = time.time()
