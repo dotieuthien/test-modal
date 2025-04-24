@@ -9,7 +9,8 @@ app = modal.App(
     image=image,
     secrets=[
         modal.Secret.from_name("openai", required_keys=["OPENAI_API_KEY"]),
-        modal.Secret.from_name("langsmith-secret", required_keys=["LANGCHAIN_API_KEY"]),
+        modal.Secret.from_name(
+            "langsmith-secret", required_keys=["LANGCHAIN_API_KEY"]),
     ],
 )
 
@@ -19,6 +20,7 @@ def create_sandbox(app) -> modal.Sandbox:
         "torch==2.5.0",
         "transformers==4.46.0",
         "huggingface-hub==0.26.0",
+        "diffusers",
     )
 
     return modal.Sandbox.create(
@@ -29,7 +31,7 @@ def create_sandbox(app) -> modal.Sandbox:
         gpu="T4",
         # you can also pass secrets here -- note that the main app's secrets are not shared
     )
-    
+
 
 def run(code: str, sb: modal.Sandbox) -> tuple[str, str]:
     print(
@@ -77,7 +79,7 @@ def construct_graph(sandbox: modal.Sandbox, debug: bool = False):
     return graph
 
 
-DEFAULT_QUESTION = "How do I generate Python code using a pre-trained model from the transformers library?"
+DEFAULT_QUESTION = "hi there, tell me what is in this figma https://www.figma.com/design/VU3riqaCfa1DUfoCjSwCTH/Test?node-id=0-1&t=XeAMWGTreiscR2t8-1?"
 
 
 @app.function()
@@ -112,4 +114,47 @@ def main(
         if question == DEFAULT_QUESTION:
             question = "hi there, how are you?"
 
-    print(go.remote(question, debug=debug))
+    # Import necessary modules
+    import sys
+    import asyncio
+    from pathlib import Path
+
+    # Set up path for importing MCP client
+    BASE = Path(__file__).parent
+    sys.path.append(str(BASE))
+    from mcp_client.figma_client import FigmaMCPClient
+
+    # Get Figma design info from MCP
+    async def get_figma_design():
+        client = FigmaMCPClient()
+        try:
+            await client.connect_to_server()
+            figma_query = "Analyze the python code for image generation, just need to describe the flow in this Figma design: https://www.figma.com/design/VU3riqaCfa1DUfoCjSwCTH/Test?node-id=0-1&t=XeAMWGTreiscR2t8-1?"
+            figma_info = await client.process_query(figma_query)
+            print("--------------------------------")
+            print(figma_info)
+            print("--------------------------------")
+            print("Figma design information obtained successfully.")
+            return figma_info
+        finally:
+            await client.close()
+
+    # Run MCP client and get Figma design details
+    figma_design_info = asyncio.run(get_figma_design())
+
+    # Create a prompt for generating frontend code based on the Figma design
+    fe_code_prompt = f"""
+    Generate python code that implements the following Figma design:
+    
+    FIGMA DESIGN DETAILS:
+    {figma_design_info}
+    """
+
+    print(f"\nGenerating frontend code based on Figma design...")
+
+    # Send the enhanced prompt to our code generation agent
+    result = go.remote(fe_code_prompt, debug=debug)
+    print("\nResult:")
+    print(result)
+
+    return result

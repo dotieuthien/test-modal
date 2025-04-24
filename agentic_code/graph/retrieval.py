@@ -2,7 +2,7 @@
 
 from .common import COLOR
 
-docs_url = "https://huggingface.co/docs/transformers/index"
+docs_url = "https://huggingface.co/docs/diffusers/index"
 
 
 def retrieve_docs(url: str = docs_url, debug=False):

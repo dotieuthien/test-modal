@@ -88,8 +88,8 @@ class FigmaMCPClient:
             }
         } for tool in response.tools]
 
-        print(messages)
-        print(available_tools)
+        # print(messages)
+        # print(available_tools)
 
         # Initial OpenAI API call
         response = await self.openai.chat.completions.create(
@@ -100,7 +100,7 @@ class FigmaMCPClient:
             max_tokens=1000
         )
 
-        print(response)
+        # print(response)
 
         # Process response and handle tool calls
         final_text = []
@@ -167,7 +167,7 @@ class FigmaMCPClient:
                     "content": str(result)  # Ensure result is string
                 })
 
-                print(messages)
+                # print(messages)
 
                 # Get next response from OpenAI
                 response = await self.openai.chat.completions.create(
