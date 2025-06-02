@@ -37,10 +37,6 @@ HOURS = 60 * MINUTES
 )
 @modal.asgi_app()
 def serve():
-    import os
-    os.environ["VLLM_API_KEY"] = TOKEN
-    
-    
     import fastapi
     from fastapi import Request
     import vllm.entrypoints.openai.api_server as api_server
@@ -126,6 +122,13 @@ def serve():
 
     # add authed vllm to our fastAPI app
     web_app.include_router(router)
+    
+    @web_app.middleware("http")
+    async def authentication(request: Request, call_next):
+        if request.headers.get("Authorization") != "Bearer " + TOKEN:
+            return JSONResponse(content={"error": "Unauthorized"},
+                                status_code=401)
+        return await call_next(request)
 
     engine_args = AsyncEngineArgs(
         model=MODELS_DIR + "/" + MODEL_NAME,
