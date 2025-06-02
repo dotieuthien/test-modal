@@ -38,6 +38,9 @@ HOURS = 60 * MINUTES
 @modal.asgi_app()
 def serve():
     import os
+    os.environ["VLLM_API_KEY"] = TOKEN
+    
+    
     import fastapi
     from fastapi import Request
     import vllm.entrypoints.openai.api_server as api_server
@@ -52,10 +55,7 @@ def serve():
     from vllm.entrypoints.openai.serving_models import (BaseModelPath,
                                                         OpenAIServingModels)
     from vllm.usage.usage_lib import UsageContext
-
-    # # set export VLLM_USE_V1=1 in python script
-    # import os
-    # os.environ["VLLM_USE_V1"] = "1"
+    
 
     def print_system_info():
         import psutil
@@ -126,9 +126,6 @@ def serve():
 
     # add authed vllm to our fastAPI app
     web_app.include_router(router)
-    
-    # set VLLM_API_KEY in environment
-    os.environ["VLLM_API_KEY"] = TOKEN
 
     engine_args = AsyncEngineArgs(
         model=MODELS_DIR + "/" + MODEL_NAME,
@@ -162,16 +159,6 @@ def serve():
     api_server.models = lambda s: openai_serving_models
 
     api_server.chat = lambda s: OpenAIServingChat(
-        engine,
-        model_config,
-        openai_serving_models,
-        chat_template=None,
-        chat_template_content_format="auto",
-        response_role="assistant",
-        request_logger=request_logger,
-    )
-
-    custom_router.generate = lambda s: OpenAIServingChat(
         engine,
         model_config,
         openai_serving_models,
