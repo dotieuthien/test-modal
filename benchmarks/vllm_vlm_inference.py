@@ -5,7 +5,7 @@ vllm_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
     .pip_install(
         "GPUtil",
-        "vllm==v0.8.3",
+        "vllm==v0.9.1",
     )
     .run_commands("apt-get update")
     .run_commands("apt-get install -y nvtop")
@@ -91,6 +91,7 @@ def serve():
         gpu_memory_utilization=0.90,
         max_model_len=8096,
         enforce_eager=False,  # capture the graph for faster inference, but slower cold starts (30s > 20s)
+        limit_mm_per_prompt={"image": 3},
     )
 
     engine = AsyncLLMEngine.from_engine_args(
@@ -123,6 +124,8 @@ def serve():
         chat_template_content_format="auto",
         response_role="assistant",
         request_logger=request_logger,
+        enable_auto_tools=True,
+        tool_parser="hermes",
     )
 
     api_server.completion = lambda s: OpenAIServingCompletion(
