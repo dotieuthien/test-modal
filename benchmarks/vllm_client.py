@@ -21,6 +21,28 @@ class Colors:
 
 
 def get_completion(client, model_id, messages, args):
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "make_transfer",
+                "description": "Transfer money, call tool when you have enough information to make a transfer",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "sender_name": {"type": "string", "description": "The sender name, not number, empty if not present"},
+                        "receiver_name": {"type": "string", "description": "The receiver name or business name, not number, empty if not present"},
+                        "sender_bank_account": {"type": "string", "description": "The sender's bank account numbers, empty if not present"},
+                        "receiver_bank_account": {"type": "string", "description": "The receiver's bank account numbers, empty if not present"},
+                        "bank_name": {"type": "string", "description": "The name of the bank or service provider, empty if not present"},
+                        "transaction_id": {"type": "string", "description": "The transaction ID, empty if not present"},
+                    },
+                    "required": ["sender_name", "receiver_name", "sender_bank_account", "receiver_bank_account", "bank_name", "transaction_id"]
+                }
+            }
+        }
+    ]
+    
     completion_args = {
         "model": model_id,
         "messages": messages,
@@ -33,6 +55,8 @@ def get_completion(client, model_id, messages, args):
         "stream": args.stream,
         "temperature": args.temperature,
         "top_p": args.top_p,
+        "tools": tools,
+        "tool_choice": "required",
     }
 
     completion_args = {
@@ -244,20 +268,24 @@ def main():
         request_id = str(uuid.uuid4())
         
         user_input = "Request ID: " + request_id + """
-            Return the results in JSON format for:
-            {
-                "sender_name": "The sender name, not number, empty if not present", 
-                "receiver_name": "The receiver name or business name, not number, empty if not present", 
-                "sender_bank_account": "The sender's bank account numbers, empty if not present", 
-                "receiver_bank_account": "The receiver's bank account numbers, empty if not present", 
-                "bank_name": "The name of the bank or service provider, empty if not present",
-                "transaction_id" :"The transaction ID, empty if not present",
-                "value": "The transaction amount", 
-                "type": "The transaction type: expense when send money to others or income when receive money from others, always return income or expense", 
-                "category": "The transaction purpose, categorized as bills, entertainment, education, shopping, others if cannot be categorized, always return value", 
-                "time": "The transaction timestamp", 
-                "noted": "Notes or messages in the transaction"
-            } 
+            Return a list of results in all given images in JSON format:
+            <response_schema>
+            [
+                {
+                    "sender_name": "The sender name, not number, empty if not present", 
+                    "receiver_name": "The receiver name or business name, not number, empty if not present", 
+                    "sender_bank_account": "The sender's bank account numbers, empty if not present", 
+                    "receiver_bank_account": "The receiver's bank account numbers, empty if not present", 
+                    "bank_name": "The name of the bank or service provider, empty if not present",
+                    "transaction_id" :"The transaction ID, empty if not present",
+                    "value": "The transaction amount", 
+                    "type": "The transaction type: expense when send money to others or income when receive money from others, always return income or expense", 
+                    "category": "The transaction purpose, categorized as bills, entertainment, education, shopping, others if cannot be categorized, always return value", 
+                    "time": "The transaction timestamp", 
+                    "noted": "Notes or messages in the transaction"
+                }
+            ]
+            </response_schema>
             """
         messages.append(
             {
@@ -265,6 +293,7 @@ def main():
                 "content": [
                     {"type": "text", "text": user_input},
                     {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
+                    {"type": "image_url", "image_url": {"url": "https://inkythuatso.com/uploads/thumbnails/800/2023/03/hinh-anh-chuyen-tien-thanh-cong-vietcombank-5-07-12-30-12.jpg"}},
                 ],
             }
         )
