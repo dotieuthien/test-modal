@@ -57,6 +57,7 @@ def get_completion(client, model_id, messages, args):
         "top_p": args.top_p,
         "tools": tools,
         "tool_choice": "required",
+        "user": "testing",
     }
 
     completion_args = {
@@ -268,7 +269,7 @@ def main():
         request_id = str(uuid.uuid4())
         
         user_input = "Request ID: " + request_id + """
-            Return a list of results in all given images in JSON format:
+            Return a list of results in all given images in JSON format, no explanation, no other text, just the JSON, nothing else:
             <response_schema>
             [
                 {
@@ -287,6 +288,10 @@ def main():
             ]
             </response_schema>
             """
+            
+        user_input = "Request ID: " + request_id + """
+        So sanh gia tri cua transaction trong hinh anh voi gia tri trong hinh anh ben duoi va tra ve ket qua so sanh
+        """
         messages.append(
             {
                 "role": "user",
