@@ -2,32 +2,37 @@ import modal
 
 
 vllm_image = (
-    modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
+    modal.Image.from_registry("nvidia/cuda:12.8.1-devel-ubuntu22.04", add_python="3.12")
     .pip_install(
         "GPUtil",
-        "vllm==v0.8.3",
+        "vllm==v0.8.5",
+        # "flashinfer-python==0.2.6.post1",
+        # extra_index_url="https://download.pytorch.org/whl/cu128",
     )
     .run_commands("apt-get update")
     .run_commands("apt-get install -y nvtop")
 )
 
 MODELS_DIR = "/llama_models"
-MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
+MODEL_NAME = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
 
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
 app = modal.App("example-vllm-openai-compatible")
 
-N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
+N_GPU = 8  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
 TOKEN = "super-secret-token"  # auth token. for production use, replace with a modal.Secret
 
 MINUTES = 60  # seconds
 HOURS = 60 * MINUTES
 
 
+vllm_image = vllm_image.env({"VLLM_USE_V1": "1"}).env({"VLLM_DISABLE_COMPILE_CACHE": "1"})
+
+
 @app.function(
     image=vllm_image,
-    gpu=f"L4:{N_GPU}",
+    gpu=f"H100:{N_GPU}",
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
@@ -48,11 +53,6 @@ def serve():
     from vllm.entrypoints.openai.serving_models import (BaseModelPath,
                                                         OpenAIServingModels)
     from vllm.usage.usage_lib import UsageContext
-    
-    
-    # # set export VLLM_USE_V1=1 in python script
-    # import os
-    # os.environ["VLLM_USE_V1"] = "1"
     
     
     def print_system_info():
@@ -89,8 +89,9 @@ def serve():
     engine_args = AsyncEngineArgs(
         model=MODELS_DIR + "/" + MODEL_NAME,
         gpu_memory_utilization=0.90,
-        max_model_len=8096,
-        enforce_eager=False,  # capture the graph for faster inference, but slower cold starts (30s > 20s)
+        max_model_len=10000,
+        tensor_parallel_size=8,
+        # enforce_eager=False,  # capture the graph for faster inference, but slower cold starts (30s > 20s)
     )
 
     engine = AsyncLLMEngine.from_engine_args(

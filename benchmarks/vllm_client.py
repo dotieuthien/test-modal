@@ -232,7 +232,7 @@ def main():
                 )
     else:
         # image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
-        image_path = "/Users/dotieuthien/Documents/rnd/test-modal/benchmarks/images/test/3.png"
+        image_path = "/Users/dotieuthien/Documents/rnd/test-modal/benchmarks/images/test/8.png"
         image = Image.open(image_path).convert("RGB")
         image_bytes = io.BytesIO()
         image.save(image_bytes, format="PNG")
@@ -244,7 +244,8 @@ def main():
         request_id = str(uuid.uuid4())
         
         user_input = "Request ID: " + request_id + """
-            Return the results in JSON format for:
+            Return the results in JSON format, no explanation, no other text, just the JSON object.
+            <response_schema>
             {
                 "sender_name": "The sender name, not number, empty if not present", 
                 "receiver_name": "The receiver name or business name, not number, empty if not present", 
@@ -258,6 +259,7 @@ def main():
                 "time": "The transaction timestamp", 
                 "noted": "Notes or messages in the transaction"
             } 
+            </response_schema>
             """
         messages.append(
             {
@@ -289,7 +291,7 @@ def main():
 
 
 if __name__ == "__main__":
-    for i in range(10):
+    for i in range(100):
         start_time = time.time()
         main()
         end_time = time.time()
