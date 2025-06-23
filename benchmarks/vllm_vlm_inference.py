@@ -1,4 +1,5 @@
 import modal
+from pathlib import Path
 
 
 vllm_image = (
@@ -9,9 +10,12 @@ vllm_image = (
         "vllm==v0.8.3",
         "gradio",
         "requests",
+        "modelscope_studio",
+        "dashscope",
     )
     .run_commands("apt-get update")
     .run_commands("apt-get install -y nvtop")
+    .pip_install("openai")
 )
 
 MODELS_DIR = "/llama_models"
@@ -29,6 +33,20 @@ MINUTES = 60  # seconds
 HOURS = 60 * MINUTES
 
 
+# gradio app folder
+gradio_dir = Path(__file__).parent / "gradio_ui"
+gradio_remote_dir = Path("/root/gradio_ui")
+
+if not gradio_dir.exists():
+    raise RuntimeError(
+        "gradio_dir directory not found! Place the folder in the same directory."
+    )
+gradio_mount = modal.Mount.from_local_dir(
+    gradio_dir,
+    remote_path=gradio_remote_dir,
+)
+
+
 @app.function(
     image=vllm_image,
     gpu=f"L4:{N_GPU}",
@@ -36,11 +54,11 @@ HOURS = 60 * MINUTES
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
     volumes={MODELS_DIR: volume},
+    mounts=[gradio_mount],
 )
 @modal.asgi_app()
 def serve():
     import fastapi
-    from fastapi.middleware.cors import CORSMiddleware
     import vllm.entrypoints.openai.api_server as api_server
     from vllm.engine.arg_utils import AsyncEngineArgs
     from vllm.engine.async_llm_engine import AsyncLLMEngine
@@ -53,147 +71,15 @@ def serve():
     from vllm.entrypoints.openai.serving_models import (BaseModelPath,
                                                         OpenAIServingModels)
     from vllm.usage.usage_lib import UsageContext
-
-    # Gradio imports
-    import json
+    
+    # import gradio app
+    import sys
+    sys.path.append("/root/gradio_ui")
+    
     import gradio as gr
-    import requests
-    import base64
+    from gradio_ui.gradio_app import demo as gradio_app
 
-    def image_to_base64(image_path):
-        with open(image_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode('utf-8')
-
-    def call_chat_bot(message, history, engine_handler, model_name):
-        import asyncio
-        from vllm.entrypoints.openai.protocol import ChatCompletionRequest
-
-        if len(message.get("files")) == 0:
-            text_message = message.get("text")
-            files = None
-        else:
-            text_message = message.get("text")
-            files = message.get("files")[0]
-
-        # Format messages for the OpenAI chat completions endpoint
-        messages = []
-        image_path = None
-        print("HISTORY: ", history)
-
-        for user_msg, assistant_msg in history:
-            if type(user_msg) == tuple and assistant_msg is None:
-                image_path = user_msg[0]
-            elif image_path is not None:
-                messages.append(
-                    {"role": "user",
-                        "content": [
-                            {"type": "text", "text": user_msg},
-                            {"type": "image_url", "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_to_base64(image_path)}"}}
-                        ]
-                     }
-                )
-                image_path = None
-            else:
-                messages.append({"role": "user", "content": user_msg})
-
-            if assistant_msg:  # Assistant message can be None if generation failed
-                messages.append(
-                    {"role": "assistant", "content": assistant_msg})
-
-        if files is not None:
-            messages.append(
-                {"role": "user",
-                    "content": [
-                        {"type": "text", "text": text_message},
-                        {"type": "image_url", "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_to_base64(files)}"}}
-                    ]
-                 }
-            )
-        else:
-            messages.append({"role": "user", "content": text_message})
-
-        # Create ChatCompletionRequest
-        request = ChatCompletionRequest(
-            model=model_name,
-            messages=messages,
-            stream=True,
-            max_tokens=2048,
-            temperature=0.9,
-        )
-
-        async def generate_response():
-            try:
-                handler = engine_handler(request)
-                generator = await handler.create_chat_completion(request)
-
-                # Handle streaming response
-                async for chunk in generator:
-                    if chunk.startswith('data: '):
-                        chunk_data = chunk[6:]  # Remove 'data: ' prefix
-                        if chunk_data.strip() == '[DONE]':
-                            break
-                        try:
-                            import json
-                            data = json.loads(chunk_data)
-                            delta = data.get("choices", [{}])[
-                                0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                yield content
-                        except (json.JSONDecodeError, IndexError, KeyError):
-                            continue
-
-            except Exception as e:
-                yield f"Error: {str(e)}"
-
-        # Run the async generator in the current event loop
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        full_response = ""
-        async_gen = generate_response()
-
-        try:
-            while True:
-                try:
-                    if loop.is_running():
-                        # If we're already in an event loop, we need to use a different approach
-                        import concurrent.futures
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(
-                                asyncio.run, async_gen.__anext__())
-                            content = future.result()
-                    else:
-                        content = loop.run_until_complete(
-                            async_gen.__anext__())
-
-                    full_response += content
-                    yield full_response
-                except StopAsyncIteration:
-                    break
-        except Exception as e:
-            yield f"Error: {str(e)}"
-
-    def create_gradio_app(engine_handler, model_name):
-        with gr.Blocks(css="#chatbot { min-height: 600px; }") as demo:
-            gr.Markdown(f"# Chatbot\n")
-
-            def chat(message, history):
-                # This is a generator function, so we must yield from the actual bot
-                yield from call_chat_bot(message, history, engine_handler, model_name)
-
-            gr.ChatInterface(
-                chat,
-                chatbot=gr.Chatbot(elem_id="chatbot"),
-                multimodal=True,
-            )
-        return demo
-
+    
     def print_system_info():
         import psutil
         import GPUtil
@@ -219,14 +105,6 @@ def serve():
         docs_url="/docs",
     )
 
-    # # add CORS
-    # web_app.add_middleware(
-    #     CORSMiddleware,
-    #     allow_origins=["*"],
-    #     allow_credentials=True,
-    #     allow_methods=["*"],
-    #     allow_headers=["*"],
-    # )
     router = fastapi.APIRouter()
 
     # wrap vllm's router in auth router
@@ -283,12 +161,7 @@ def serve():
 
     web_app.state.enable_server_load_tracking = True
     web_app.state.server_load_metrics = 0
-
-    # Create and mount Gradio app with direct engine access
-    chat_handler = api_server.chat  # Get the chat handler
-    gradio_app = create_gradio_app(chat_handler, MODEL_NAME.split("/")[1])
-
-    # Mount Gradio app to FastAPI
+    gradio_app.queue(default_concurrency_limit=100, max_size=100)
     web_app = gr.mount_gradio_app(web_app, gradio_app, path="/chat")
 
     return web_app
