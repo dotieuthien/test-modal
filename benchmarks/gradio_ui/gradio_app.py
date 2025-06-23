@@ -14,24 +14,42 @@ from ui_components.thinking_button import ThinkingButton
 
 
 def format_history(history, sys_prompt):
-    # messages = [{
-    #     "role": "system",
-    #     "content": sys_prompt,
-    # }]
     messages = []
     for item in history:
         if item["role"] == "user":
-            messages.append({"role": "user", "content": item["content"]})
+            # Use original_content if available, otherwise fall back to content
+            content_to_process = item.get("original_content", item["content"])
+
+            # Handle text and image content
+            if isinstance(content_to_process, str):
+                messages.append(
+                    {"role": "user", "content": content_to_process})
+            elif isinstance(content_to_process, dict):
+                # Handle multimodal content (text + images)
+                content_parts = []
+                if content_to_process.get("text"):
+                    content_parts.append(
+                        {"type": "text", "text": content_to_process["text"]})
+                if content_to_process.get("files"):
+                    for file_info in content_to_process["files"]:
+                        # Convert uploaded file to base64 for OpenAI API
+                        import base64
+                        with open(file_info["path"], "rb") as f:
+                            image_data = base64.b64encode(
+                                f.read()).decode('utf-8')
+                        content_parts.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
+                        })
+                messages.append({"role": "user", "content": content_parts})
         elif item["role"] == "assistant":
             contents = [{
                 "type": "text",
                 "text": content["content"]
             } for content in item["content"] if content["type"] == "text"]
             messages.append({
-                "role":
-                "assistant",
-                "content":
-                contents[0]["text"] if len(contents) > 0 else ""
+                "role": "assistant",
+                "content": contents[0]["text"] if len(contents) > 0 else ""
             })
     return messages
 
@@ -41,13 +59,13 @@ def call_chat_bot(model, messages, enable_thinking, thinking_budget):
     Centralized function to handle chat bot streaming API calls using OpenAI SDK
     """
     from openai import OpenAI
-    
+
     # Initialize OpenAI client
     client = OpenAI(
         api_key="super-secret-token",
         base_url="https://styleme--example-vllm-openai-compatible-serve.modal.run/v1",
     )
-    
+
     # Create streaming chat completion
     stream_response = client.chat.completions.create(
         model=model,
@@ -56,7 +74,7 @@ def call_chat_bot(model, messages, enable_thinking, thinking_budget):
         max_tokens=2048,
         temperature=0.9,
     )
-    
+
     return stream_response
 
 
@@ -125,7 +143,8 @@ class Gradio_Events:
                     reasoning_content += delta.get("reasoning_content", None)
                 if hasattr(delta, 'content'):
                     if not is_answering:
-                        thought_cost_time = "{:.2f}".format(time.time() - start_time)
+                        thought_cost_time = "{:.2f}".format(
+                            time.time() - start_time)
                         if contents[0]:
                             contents[0]["options"]["title"] = get_text(
                                 f"End of Thought ({thought_cost_time}s)",
@@ -182,7 +201,7 @@ class Gradio_Events:
             raise e
 
     @staticmethod
-    def add_message(input_value, settings_form_value, thinking_btn_state_value, state_value):
+    def add_message(input_value, image_files, settings_form_value, thinking_btn_state_value, state_value):
         if not state_value["conversation_id"]:
             random_id = str(uuid.uuid4())
             history = []
@@ -191,8 +210,11 @@ class Gradio_Events:
                 state_value["conversation_id"]] = {
                     "history": history
             }
+            # Use first part of message for conversation label
+            label = input_value if isinstance(
+                input_value, str) else "New Conversation"
             state_value["conversations"].append({
-                "label": input_value,
+                "label": label[:50] + "..." if len(label) > 50 else label,
                 "key": random_id
             })
 
@@ -205,11 +227,57 @@ class Gradio_Events:
                 "settings": settings_form_value,
                 "enable_thinking": thinking_btn_state_value["enable_thinking"]
         }
+
+        # Create multimodal content if images are provided
+        if image_files and len(image_files) > 0:
+            import base64
+
+            # Simple string-based approach (keeping the working method)
+            display_content = input_value if input_value else ""
+
+            for i, file in enumerate(image_files):
+                try:
+                    with open(file.name, "rb") as f:
+                        image_data = base64.b64encode(f.read()).decode('utf-8')
+
+                    # Determine proper MIME type
+                    file_ext = file.name.lower().split('.')[-1]
+                    mime_type = {
+                        'jpg': 'image/jpeg',
+                        'jpeg': 'image/jpeg',
+                        'png': 'image/png',
+                        'gif': 'image/gif',
+                        'webp': 'image/webp'
+                    }.get(file_ext, 'image/jpeg')
+
+                    data_url = f"data:{mime_type};base64,{image_data}"
+
+                    # Add image as HTML img tag with professional styling
+                    display_content += f'\n\n<img src="{data_url}" style="max-width: 300px; max-height: 300px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin: 8px 0;" alt="Uploaded image {i+1}"/>'
+                except Exception as e:
+                    print(f"Error processing image {file.name}: {e}")
+                    display_content += f"\n❌ Error loading image: {file.name.split('/')[-1]}"
+
+            message_content = display_content
+
+            # Store the original format for API calls
+            original_content = {
+                "text": input_value,
+                "files": [{"path": f.name} for f in image_files]
+            }
+        else:
+            # Text-only message
+            message_content = input_value
+            original_content = input_value
+
+        # Handle multimodal input (text + images)
         history.append({
             "role": "user",
-            "content": input_value,
+            "content": message_content,
+            "original_content": original_content,  # Store original for API calls
             "key": str(uuid.uuid4())
         })
+
         yield Gradio_Events.preprocess_submit(clear_input=True)(state_value)
 
         try:
@@ -222,7 +290,6 @@ class Gradio_Events:
 
     @staticmethod
     def preprocess_submit(clear_input=True):
-
         def preprocess_submit_handler(state_value):
             history = state_value["conversation_contexts"][
                 state_value["conversation_id"]]["history"]
@@ -230,6 +297,8 @@ class Gradio_Events:
                 **(
                     {
                         input: gr.update(value=None, loading=True) if clear_input else gr.update(loading=True),
+                        # Hide and clear image upload
+                        image_upload: gr.update(value=None, visible=False),
                     } if clear_input else {}
                 ),
                 conversations: gr.update(
@@ -248,6 +317,8 @@ class Gradio_Events:
                 add_conversation_btn: gr.update(disabled=True),
                 clear_btn: gr.update(disabled=True),
                 conversation_delete_menu_item: gr.update(disabled=True),
+                # Disable upload button during processing
+                upload_btn: gr.update(disabled=True),
                 chatbot: gr.update(
                     value=history,
                     bot_config=bot_config(
@@ -257,7 +328,6 @@ class Gradio_Events:
                 ),
                 state: gr.update(value=state_value),
             }
-
         return preprocess_submit_handler
 
     @staticmethod
@@ -265,10 +335,13 @@ class Gradio_Events:
         history = state_value["conversation_contexts"][state_value["conversation_id"]]["history"]
         return {
             input: gr.update(loading=False),
+            # Keep hidden after completion
+            image_upload: gr.update(visible=False),
             conversation_delete_menu_item: gr.update(disabled=False),
             clear_btn: gr.update(disabled=False),
             conversations: gr.update(items=state_value["conversations"]),
             add_conversation_btn: gr.update(disabled=False),
+            upload_btn: gr.update(disabled=False),  # Re-enable upload button
             chatbot: gr.update(
                 value=history,
                 bot_config=bot_config(),
@@ -284,7 +357,11 @@ class Gradio_Events:
         history[-1]["status"] = "done"
         history[-1]["footer"] = get_text("Chat completion paused",
                                          "Cuộc trò chuyện đã bị tạm dừng")
-        return Gradio_Events.postprocess_submit(state_value)
+        return {
+            **Gradio_Events.postprocess_submit(state_value),
+            # Hide upload area on cancel too
+            image_upload: gr.update(visible=False)
+        }
 
     @staticmethod
     def delete_message(state_value, e: gr.EventData):
@@ -416,6 +493,10 @@ class Gradio_Events:
             items=browser_state_value["conversations"]), gr.update(
                 value=state_value)
 
+    @staticmethod
+    def toggle_image_upload(current_visibility):
+        return gr.update(visible=not current_visibility)
+
 
 css = """
 .gradio-container {
@@ -455,6 +536,31 @@ css = """
     display: flex;
     flex-wrap: wrap;
 }
+
+/* Professional image upload styling */
+.image-upload-hidden {
+    transition: all 0.3s ease-in-out;
+    border: 2px dashed #d9d9d9;
+    border-radius: 8px;
+    padding: 16px;
+    background: #fafafa;
+}
+
+.image-upload-hidden:hover {
+    border-color: #1890ff;
+    background: #f0f9ff;
+}
+
+/* Image display in chat */
+.chatbot-chat-messages img {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+}
+
+.chatbot-chat-messages img:hover {
+    transform: scale(1.02);
+}
 """
 
 model_options_map_json = json.dumps(MODEL_OPTIONS_MAP)
@@ -492,17 +598,18 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
                             with ms.Slot("icon"):
                                 antd.Icon("PlusOutlined")
 
-                        # # Conversations List
-                        # with antdx.Conversations(
-                        #         elem_classes="chatbot-conversations-list",
-                        # ) as conversations:
-                        #     with ms.Slot('menu.items'):
-                        #         with antd.Menu.Item(
-                        #                 label="Delete", key="delete",
-                        #                 danger=True
-                        #         ) as conversation_delete_menu_item:
-                        #             with ms.Slot("icon"):
-                        #                 antd.Icon("DeleteOutlined")
+                        # Conversations List
+                        with antdx.Conversations(
+                                elem_classes="chatbot-conversations-list",
+                        ) as conversations:
+                            with ms.Slot('menu.items'):
+                                with antd.Menu.Item(
+                                        label="Delete", key="delete",
+                                        danger=True
+                                ) as conversation_delete_menu_item:
+                                    with ms.Slot("icon"):
+                                        antd.Icon("DeleteOutlined")
+
             # Right Column
             with antd.Col(flex=1, elem_style=dict(height="100%")):
                 with antd.Flex(vertical=True,
@@ -515,48 +622,70 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
                                           user_config=user_config(),
                                           bot_config=bot_config())
 
-                    # Input
-                    with antdx.Suggestion(
-                            items=DEFAULT_SUGGESTIONS,
-                            # onKeyDown Handler in Javascript
-                            should_trigger="""(e, { onTrigger, onKeyDown }) => {
-                      switch(e.key) {
-                        case '/':
-                          onTrigger()
-                          break
-                        case 'ArrowRight':
-                        case 'ArrowLeft':
-                        case 'ArrowUp':
-                        case 'ArrowDown':
-                          break;
-                        default:
-                          onTrigger(false)
-                      }
-                      onKeyDown(e)
-                    }""") as suggestion:
-                        with ms.Slot("children"):
-                            with antdx.Sender(placeholder=get_text(
-                                    "Enter \"/\" to get suggestions",
-                                    "Nhập \"/\" để nhận được gợi ý"), ) as input:
-                                with ms.Slot("header"):
-                                    settings_header_state, settings_form = SettingsHeader(
+                    # Input section with separate image upload
+                    with antd.Flex(vertical=True, gap="small"):
+                        # Image upload area (optional - only show when needed)
+                        image_upload = gr.File(
+                            file_count="multiple",
+                            file_types=["image"],
+                            label="Upload Images",
+                            visible=False,
+                            elem_classes="image-upload-hidden"
+                        )
+
+                        # Text input with upload button
+                        with antdx.Suggestion(
+                                items=DEFAULT_SUGGESTIONS,
+                                should_trigger="""(e, { onTrigger, onKeyDown }) => {
+                          switch(e.key) {
+                            case '/':
+                              onTrigger()
+                              break
+                            case 'ArrowRight':
+                            case 'ArrowLeft':
+                            case 'ArrowUp':
+                            case 'ArrowDown':
+                              break;
+                            default:
+                              onTrigger(false)
+                          }
+                          onKeyDown(e)
+                        }""") as suggestion:
+                            with ms.Slot("children"):
+                                with antdx.Sender(
+                                    placeholder=get_text(
+                                        "Enter your message here...",
+                                        "Nhập tin nhắn của bạn tại đây..."
                                     )
-                                with ms.Slot("prefix"):
-                                    with antd.Flex(
-                                            gap=4,
-                                            wrap=True,
-                                            elem_style=dict(maxWidth='40vw')):
-                                        with antd.Button(
-                                                value=None,
-                                                type="text") as setting_btn:
-                                            with ms.Slot("icon"):
-                                                antd.Icon("SettingOutlined")
-                                        with antd.Button(
-                                                value=None,
-                                                type="text") as clear_btn:
-                                            with ms.Slot("icon"):
-                                                antd.Icon("ClearOutlined")
-                                        thinking_btn_state = ThinkingButton()
+                                ) as input:
+                                    with ms.Slot("header"):
+                                        settings_header_state, settings_form = SettingsHeader()
+                                    with ms.Slot("prefix"):
+                                        with antd.Flex(
+                                                gap=4,
+                                                wrap=True,
+                                                elem_style=dict(maxWidth='40vw')):
+                                            with antd.Button(
+                                                    value=None,
+                                                    type="text") as setting_btn:
+                                                with ms.Slot("icon"):
+                                                    antd.Icon(
+                                                        "SettingOutlined")
+                                            with antd.Button(
+                                                    value=None,
+                                                    type="text") as clear_btn:
+                                                with ms.Slot("icon"):
+                                                    antd.Icon("ClearOutlined")
+
+                                            # Image upload button
+                                            with antd.Button(
+                                                    value=None,
+                                                    type="text") as upload_btn:
+                                                with ms.Slot("icon"):
+                                                    antd.Icon(
+                                                        "PictureOutlined")
+
+                                            thinking_btn_state = ThinkingButton()
 
     # Events Handler
     # Browser State Handler
@@ -606,23 +735,23 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
         fn=Gradio_Events.regenerate_message,
         inputs=[settings_form, thinking_btn_state, state],
         outputs=[
-            input, clear_btn, conversation_delete_menu_item,
-            add_conversation_btn, conversations, chatbot, state
+            input, image_upload, clear_btn, conversation_delete_menu_item,
+            add_conversation_btn, conversations, chatbot, upload_btn, state
         ])
 
     # Input Handler
     submit_event = input.submit(
         fn=Gradio_Events.add_message,
-        inputs=[input, settings_form, thinking_btn_state, state],
+        inputs=[input, image_upload, settings_form, thinking_btn_state, state],
         outputs=[
-            input, clear_btn, conversation_delete_menu_item,
-            add_conversation_btn, conversations, chatbot, state
+            input, image_upload, clear_btn, conversation_delete_menu_item,
+            add_conversation_btn, conversations, chatbot, upload_btn, state
         ])
     input.cancel(fn=Gradio_Events.cancel,
                  inputs=[state],
                  outputs=[
-                     input, conversation_delete_menu_item, clear_btn,
-                     conversations, add_conversation_btn, chatbot, state
+                     input, image_upload, conversation_delete_menu_item, clear_btn,
+                     conversations, add_conversation_btn, chatbot, upload_btn, state
                  ],
                  cancels=[submit_event, regenerating_event],
                  queue=False)
@@ -636,6 +765,13 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
     suggestion.select(fn=Gradio_Events.select_suggestion,
                       inputs=[input],
                       outputs=[input])
+
+    # Event handlers
+    upload_btn.click(
+        fn=Gradio_Events.toggle_image_upload,
+        inputs=[image_upload],
+        outputs=[image_upload]
+    )
 
 
 if __name__ == "__main__":

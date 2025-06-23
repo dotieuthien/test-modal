@@ -118,6 +118,7 @@ def serve():
         max_model_len=8096,
         # capture the graph for faster inference, but slower cold starts (30s > 20s)
         enforce_eager=False,
+        limit_mm_per_prompt={"image": 10},
     )
 
     engine = AsyncLLMEngine.from_engine_args(
