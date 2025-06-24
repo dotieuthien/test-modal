@@ -297,7 +297,7 @@ class Gradio_Events:
                 **(
                     {
                         input: gr.update(value=None, loading=True) if clear_input else gr.update(loading=True),
-                        # Hide and clear image upload
+                        # Keep image upload hidden and clear it
                         image_upload: gr.update(value=None, visible=False),
                     } if clear_input else {}
                 ),
@@ -335,8 +335,8 @@ class Gradio_Events:
         history = state_value["conversation_contexts"][state_value["conversation_id"]]["history"]
         return {
             input: gr.update(loading=False),
-            # Keep hidden after completion
-            image_upload: gr.update(visible=False),
+            # Keep image upload hidden and cleared
+            image_upload: gr.update(value=None, visible=False),
             conversation_delete_menu_item: gr.update(disabled=False),
             clear_btn: gr.update(disabled=False),
             conversations: gr.update(items=state_value["conversations"]),
@@ -359,8 +359,8 @@ class Gradio_Events:
                                          "Cuộc trò chuyện đã bị tạm dừng")
         return {
             **Gradio_Events.postprocess_submit(state_value),
-            # Hide upload area on cancel too
-            image_upload: gr.update(visible=False)
+            # Keep upload area hidden
+            image_upload: gr.update(value=None, visible=False)
         }
 
     @staticmethod
@@ -494,8 +494,9 @@ class Gradio_Events:
                 value=state_value)
 
     @staticmethod
-    def toggle_image_upload(current_visibility):
-        return gr.update(visible=not current_visibility)
+    def trigger_file_upload():
+        """Dummy function - actual file browser trigger is handled by JavaScript"""
+        return gr.update()
 
 
 css = """
@@ -537,18 +538,25 @@ css = """
     flex-wrap: wrap;
 }
 
-/* Professional image upload styling */
-.image-upload-hidden {
-    transition: all 0.3s ease-in-out;
-    border: 2px dashed #d9d9d9;
-    border-radius: 8px;
-    padding: 16px;
-    background: #fafafa;
+/* Hidden image upload component */
+#hidden-image-upload {
+    display: none !important;
 }
 
-.image-upload-hidden:hover {
-    border-color: #1890ff;
-    background: #f0f9ff;
+/* Image preview area styling */
+#image-preview-area {
+    min-height: 0px !important;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+}
+
+#image-preview-area:not(:empty) {
+    background-color: #f8f9fa !important;
+    border: 1px solid #e9ecef !important;
+    padding: 8px 12px !important;
+    margin-bottom: 8px !important;
 }
 
 /* Image display in chat */
@@ -561,11 +569,292 @@ css = """
 .chatbot-chat-messages img:hover {
     transform: scale(1.02);
 }
+
+/* Upload button styling */
+#upload-trigger-btn {
+    transition: all 0.2s ease;
+}
+
+#upload-trigger-btn:hover {
+    background-color: rgba(22, 119, 255, 0.06) !important;
+    color: #1677ff !important;
+}
 """
 
 model_options_map_json = json.dumps(MODEL_OPTIONS_MAP)
-js = "function init() { window.MODEL_OPTIONS_MAP=" + \
-    model_options_map_json + "}"
+js = """
+function init() { 
+    window.MODEL_OPTIONS_MAP = """ + model_options_map_json + """;
+    
+    // Store selected files globally
+    window.selectedImageFiles = [];
+    window.fileInputInitialized = false;
+    
+    // Function to create image preview thumbnails
+    window.createImagePreview = function(files) {
+        const previewArea = document.querySelector('#image-preview-area');
+        if (!previewArea) {
+            console.log('Preview area not found');
+            return;
+        }
+        
+        console.log('Creating preview for', files.length, 'files');
+        
+        // Clear previous previews
+        previewArea.innerHTML = '';
+        window.selectedImageFiles = Array.from(files);
+        
+        if (files.length === 0) {
+            previewArea.style.display = 'none';
+            return;
+        }
+        
+        // Show preview area with proper styling
+        previewArea.style.display = 'flex';
+        previewArea.style.backgroundColor = '#f8f9fa';
+        previewArea.style.border = '1px solid #e9ecef';
+        previewArea.style.borderRadius = '8px';
+        previewArea.style.padding = '8px 12px';
+        previewArea.style.marginBottom = '8px';
+        previewArea.style.flexWrap = 'wrap';
+        previewArea.style.gap = '8px';
+        
+        Array.from(files).forEach((file, index) => {
+            // Handle both regular File objects and Gradio file objects
+            if (file instanceof File) {
+                // Regular File object
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    window.createImageThumbnail(e.target.result, file.name, index, previewArea);
+                };
+                reader.readAsDataURL(file);
+            } else if (file && file.name) {
+                // Gradio file object - use the file path directly
+                const fileName = file.name.split('/').pop();
+                const imageUrl = file.name; // Gradio provides the file path
+                window.createImageThumbnail(imageUrl, fileName, index, previewArea);
+            }
+        });
+    };
+    
+    // Helper function to create image thumbnail
+    window.createImageThumbnail = function(imageSrc, fileName, index, previewArea) {
+        const imageContainer = document.createElement('div');
+        imageContainer.style.cssText = `
+            position: relative;
+            display: inline-block;
+            margin: 2px;
+        `;
+        
+        const img = document.createElement('img');
+        img.src = imageSrc;
+        img.style.cssText = `
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #d9d9d9;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        `;
+        
+        // Add hover effect
+        img.onmouseover = function() {
+            this.style.transform = 'scale(1.05)';
+            this.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        };
+        img.onmouseout = function() {
+            this.style.transform = 'scale(1)';
+            this.style.boxShadow = 'none';
+        };
+        
+        const removeBtn = document.createElement('div');
+        removeBtn.innerHTML = '×';
+        removeBtn.style.cssText = `
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 20px;
+            height: 20px;
+            background: #ff4d4f;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: all 0.2s ease;
+        `;
+        
+        // Add hover effect to remove button
+        removeBtn.onmouseover = function() {
+            this.style.backgroundColor = '#ff7875';
+            this.style.transform = 'scale(1.1)';
+        };
+        removeBtn.onmouseout = function() {
+            this.style.backgroundColor = '#ff4d4f';
+            this.style.transform = 'scale(1)';
+        };
+        
+        removeBtn.onclick = function(e) {
+            e.stopPropagation();
+            window.removeImageFromPreview(index);
+        };
+        
+        // Add file name tooltip
+        const displayName = fileName.length > 20 ? fileName.substring(0, 20) + '...' : fileName;
+        img.title = displayName;
+        
+        imageContainer.appendChild(img);
+        imageContainer.appendChild(removeBtn);
+        previewArea.appendChild(imageContainer);
+    };
+    
+    // Function to remove image from preview
+    window.removeImageFromPreview = function(index) {
+        window.selectedImageFiles.splice(index, 1);
+        
+        // Update preview without triggering change events
+        window.createImagePreview(window.selectedImageFiles);
+        
+        // Update the hidden file input value only (without triggering events)
+        const hiddenUpload = document.querySelector('#hidden-image-upload input[type="file"]');
+        if (hiddenUpload) {
+            // Create a new FileList-like object with remaining files
+            const dt = new DataTransfer();
+            window.selectedImageFiles.forEach(file => {
+                dt.items.add(file);
+            });
+            hiddenUpload.files = dt.files;
+        }
+    };
+    
+    // Function to clear all image previews
+    window.clearImagePreviews = function() {
+        console.log('Clearing image previews');
+        window.selectedImageFiles = [];
+        const previewArea = document.querySelector('#image-preview-area');
+        if (previewArea) {
+            previewArea.innerHTML = '';
+            previewArea.style.display = 'none';
+        }
+        
+        // Clear the hidden file input without triggering events
+        const hiddenUpload = document.querySelector('#hidden-image-upload input[type="file"]');
+        if (hiddenUpload) {
+            hiddenUpload.value = '';
+        }
+    };
+    
+    // Function to trigger file upload directly
+    window.triggerFileUpload = function() {
+        console.log('Triggering file upload');
+        const hiddenUpload = document.querySelector('#hidden-image-upload input[type="file"]');
+        if (hiddenUpload) {
+            hiddenUpload.click();
+        } else {
+            console.log('Hidden upload input not found');
+        }
+    };
+    
+    // Function to find and attach listener to file input (only once)
+    window.attachFileListener = function() {
+        if (window.fileInputInitialized) {
+            return true;
+        }
+        
+        // Try multiple selectors to find the file input
+        const selectors = [
+            '#hidden-image-upload input[type="file"]',
+            '#hidden-image-upload input',
+            'input[type="file"][data-testid]',
+            'input[type="file"]'
+        ];
+        
+        let fileInput = null;
+        for (let selector of selectors) {
+            const elements = document.querySelectorAll(selector);
+            for (let element of elements) {
+                // Check if this is likely our hidden upload input
+                if (element.closest('#hidden-image-upload') || 
+                    element.accept && element.accept.includes('image') ||
+                    element.multiple) {
+                    fileInput = element;
+                    break;
+                }
+            }
+            if (fileInput) break;
+        }
+        
+        if (fileInput) {
+            console.log('Attaching listener to file input:', fileInput);
+            
+            fileInput.addEventListener('change', function(e) {
+                console.log('File input changed:', e.target.files);
+                if (e.target.files && e.target.files.length > 0) {
+                    window.selectedImageFiles = Array.from(e.target.files);
+                    window.createImagePreview(e.target.files);
+                } else {
+                    window.clearImagePreviews();
+                }
+            }, { once: false, passive: true });
+            
+            window.fileInputInitialized = true;
+            return true;
+        }
+        return false;
+    };
+    
+    // Function to setup upload button click handler (only once)
+    window.setupUploadButton = function() {
+        const uploadBtn = document.querySelector('#upload-trigger-btn');
+        if (uploadBtn && !uploadBtn.hasAttribute('data-click-attached')) {
+            console.log('Setting up upload button');
+            uploadBtn.setAttribute('data-click-attached', 'true');
+            uploadBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.triggerFileUpload();
+            }, { once: false, passive: false });
+        }
+    };
+    
+    // Main initialization function
+    window.initImageUpload = function() {
+        console.log('Initializing image upload functionality');
+        
+        // Setup upload button
+        window.setupUploadButton();
+        
+        // Try to attach file listener
+        if (!window.attachFileListener()) {
+            // If not found, try once more after a short delay
+            setTimeout(function() {
+                if (!window.fileInputInitialized) {
+                    window.attachFileListener();
+                }
+            }, 1000);
+        }
+    };
+    
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', window.initImageUpload);
+    } else {
+        window.initImageUpload();
+    }
+    
+    // Single retry after a delay to catch dynamically created elements
+    setTimeout(function() {
+        if (!window.fileInputInitialized) {
+            window.initImageUpload();
+        }
+    }, 2000);
+}
+"""
 
 with gr.Blocks(css=css, js=js, fill_width=True) as demo:
     state = gr.State({
@@ -624,14 +913,29 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
 
                     # Input section with separate image upload
                     with antd.Flex(vertical=True, gap="small"):
-                        # Image upload area (optional - only show when needed)
+                        # Image upload area (hidden - triggered by button)
                         image_upload = gr.File(
                             file_count="multiple",
                             file_types=["image"],
                             label="Upload Images",
                             visible=False,
-                            elem_classes="image-upload-hidden"
+                            elem_id="hidden-image-upload"
                         )
+
+                        # Image preview area (shows uploaded images like ChatGPT)
+                        with antd.Flex(
+                            gap="small",
+                            wrap=True,
+                            elem_id="image-preview-area",
+                            elem_style=dict(
+                                minHeight="0px",
+                                padding="8px 12px",
+                                borderRadius="8px",
+                                backgroundColor="transparent",
+                                display="none"
+                            )
+                        ) as image_preview_container:
+                            pass  # This will be populated by JavaScript
 
                         # Text input with upload button
                         with antdx.Suggestion(
@@ -677,10 +981,11 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
                                                 with ms.Slot("icon"):
                                                     antd.Icon("ClearOutlined")
 
-                                            # Image upload button
+                                            # Image upload button - triggers file browser directly
                                             with antd.Button(
                                                     value=None,
-                                                    type="text") as upload_btn:
+                                                    type="text",
+                                                    elem_id="upload-trigger-btn") as upload_btn:
                                                 with ms.Slot("icon"):
                                                     antd.Icon(
                                                         "PictureOutlined")
@@ -766,11 +1071,60 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
                       inputs=[input],
                       outputs=[input])
 
-    # Event handlers
+    # Upload button click handler - JavaScript handles the actual file browser trigger
     upload_btn.click(
-        fn=Gradio_Events.toggle_image_upload,
+        fn=Gradio_Events.trigger_file_upload,
+        outputs=[],
+        js="window.triggerFileUpload()"
+    )
+
+    # Handle file upload changes to show preview
+    image_upload.change(
+        fn=lambda files: files,  # Pass through the files
         inputs=[image_upload],
-        outputs=[image_upload]
+        outputs=[image_upload],
+        js="""
+        (files) => {
+            console.log('Gradio file change detected:', files);
+            if (files && files.length > 0) {
+                // Convert file objects to actual File objects for preview
+                const fileList = [];
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (file && file.name) {
+                        // Create a File object from the Gradio file
+                        fetch(file.name)
+                            .then(response => response.blob())
+                            .then(blob => {
+                                const actualFile = new File([blob], file.name.split('/').pop(), {
+                                    type: blob.type || 'image/jpeg'
+                                });
+                                fileList.push(actualFile);
+                                if (fileList.length === files.length) {
+                                    window.createImagePreview(fileList);
+                                }
+                            })
+                            .catch(err => {
+                                console.log('Error creating file preview:', err);
+                                // Fallback: just show file names
+                                window.createImagePreview(files);
+                            });
+                    }
+                }
+            } else {
+                window.clearImagePreviews();
+            }
+            return files;
+        }
+        """,
+        queue=False
+    )
+
+    # Clear image previews when input is submitted
+    input.submit(
+        outputs=[],
+        js="setTimeout(() => window.clearImagePreviews(), 100)",
+        queue=False
     )
 
 
