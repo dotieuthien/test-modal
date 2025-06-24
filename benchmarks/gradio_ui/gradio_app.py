@@ -34,13 +34,34 @@ def format_history(history, sys_prompt):
                     for file_info in content_to_process["files"]:
                         # Convert uploaded file to base64 for OpenAI API
                         import base64
-                        with open(file_info["path"], "rb") as f:
-                            image_data = base64.b64encode(
-                                f.read()).decode('utf-8')
-                        content_parts.append({
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
-                        })
+
+                        # Handle different file path formats
+                        file_path = None
+                        if isinstance(file_info, dict):
+                            file_path = file_info.get("path")
+                        elif hasattr(file_info, 'path'):
+                            file_path = file_info.path
+                        elif hasattr(file_info, 'name'):
+                            file_path = file_info.name
+                        else:
+                            file_path = str(file_info)
+
+                        if not file_path:
+                            print(
+                                f"Warning: Could not get file path from {file_info}")
+                            continue
+
+                        try:
+                            with open(file_path, "rb") as f:
+                                image_data = base64.b64encode(
+                                    f.read()).decode('utf-8')
+                            content_parts.append({
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
+                            })
+                        except Exception as e:
+                            print(f"Error reading file {file_path}: {e}")
+                            continue
                 messages.append({"role": "user", "content": content_parts})
         elif item["role"] == "assistant":
             contents = [{
@@ -201,7 +222,7 @@ class Gradio_Events:
             raise e
 
     @staticmethod
-    def add_message(input_value, image_files, settings_form_value, thinking_btn_state_value, state_value):
+    def add_message(input_value, selected_images, settings_form_value, thinking_btn_state_value, state_value):
         if not state_value["conversation_id"]:
             random_id = str(uuid.uuid4())
             history = []
@@ -228,20 +249,34 @@ class Gradio_Events:
                 "enable_thinking": thinking_btn_state_value["enable_thinking"]
         }
 
+        # Use the selected_images from the state
+        normalized_files = selected_images if selected_images else []
+
         # Create multimodal content if images are provided
-        if image_files and len(image_files) > 0:
+        if normalized_files and len(normalized_files) > 0:
             import base64
 
             # Simple string-based approach (keeping the working method)
             display_content = input_value if input_value else ""
 
-            for i, file in enumerate(image_files):
+            for i, file in enumerate(normalized_files):
                 try:
-                    with open(file.name, "rb") as f:
+                    # Handle different file object structures
+                    file_path = None
+                    if hasattr(file, 'name'):
+                        file_path = file.name
+                    elif isinstance(file, dict):
+                        file_path = file.get('path') or file.get('name')
+
+                    if not file_path:
+                        print(f"Warning: Could not get file path for file {i}")
+                        continue
+
+                    with open(file_path, "rb") as f:
                         image_data = base64.b64encode(f.read()).decode('utf-8')
 
                     # Determine proper MIME type
-                    file_ext = file.name.lower().split('.')[-1]
+                    file_ext = file_path.lower().split('.')[-1]
                     mime_type = {
                         'jpg': 'image/jpeg',
                         'jpeg': 'image/jpeg',
@@ -255,15 +290,17 @@ class Gradio_Events:
                     # Add image as HTML img tag with professional styling
                     display_content += f'\n\n<img src="{data_url}" style="max-width: 300px; max-height: 300px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin: 8px 0;" alt="Uploaded image {i+1}"/>'
                 except Exception as e:
-                    print(f"Error processing image {file.name}: {e}")
-                    display_content += f"\n❌ Error loading image: {file.name.split('/')[-1]}"
+                    print(f"Error processing image {file}: {e}")
+                    file_name = str(file).split(
+                        '/')[-1] if isinstance(file, str) else "unknown file"
+                    display_content += f"\n❌ Error loading image: {file_name}"
 
             message_content = display_content
 
             # Store the original format for API calls
             original_content = {
                 "text": input_value,
-                "files": [{"path": f.name} for f in image_files]
+                "files": [{"path": (f.name if hasattr(f, 'name') else f.get('path', f.get('name', str(f))))} for f in normalized_files]
             }
         else:
             # Text-only message
@@ -342,6 +379,7 @@ class Gradio_Events:
             conversations: gr.update(items=state_value["conversations"]),
             add_conversation_btn: gr.update(disabled=False),
             upload_btn: gr.update(disabled=False),  # Re-enable upload button
+            selected_images_state: gr.update(value=[]),
             chatbot: gr.update(
                 value=history,
                 bot_config=bot_config(),
@@ -360,7 +398,8 @@ class Gradio_Events:
         return {
             **Gradio_Events.postprocess_submit(state_value),
             # Keep upload area hidden
-            image_upload: gr.update(value=None, visible=False)
+            image_upload: gr.update(value=None, visible=False),
+            selected_images_state: gr.update(value=[])  # Clear selected images
         }
 
     @staticmethod
@@ -598,16 +637,39 @@ function init() {
             return;
         }
         
-        console.log('Creating preview for', files.length, 'files');
+        console.log('Creating preview for', files, 'files');
         
         // Clear previous previews
         previewArea.innerHTML = '';
-        window.selectedImageFiles = Array.from(files);
         
-        if (files.length === 0) {
+        // Handle different file input formats
+        let fileArray = [];
+        if (!files) {
+            // No files
+            previewArea.style.display = 'none';
+            return;
+        } else if (Array.isArray(files)) {
+            fileArray = files;
+        } else if (files.length !== undefined) {
+            // FileList or similar array-like object
+            fileArray = Array.from(files);
+        } else if (typeof files === 'object') {
+            // Single file object
+            fileArray = [files];
+        } else {
+            console.log('Unexpected file format:', files);
             previewArea.style.display = 'none';
             return;
         }
+        
+        window.selectedImageFiles = fileArray;
+        
+        if (fileArray.length === 0) {
+            previewArea.style.display = 'none';
+            return;
+        }
+        
+        console.log('Processing', fileArray.length, 'files');
         
         // Show preview area with proper styling
         previewArea.style.display = 'flex';
@@ -619,20 +681,36 @@ function init() {
         previewArea.style.flexWrap = 'wrap';
         previewArea.style.gap = '8px';
         
-        Array.from(files).forEach((file, index) => {
-            // Handle both regular File objects and Gradio file objects
+        fileArray.forEach((file, index) => {
+            // Handle different file object formats
+            let fileName = 'unknown';
+            let filePath = null;
+            
             if (file instanceof File) {
                 // Regular File object
+                fileName = file.name;
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    window.createImageThumbnail(e.target.result, file.name, index, previewArea);
+                    window.createImageThumbnail(e.target.result, fileName, index, previewArea);
                 };
                 reader.readAsDataURL(file);
-            } else if (file && file.name) {
-                // Gradio file object - use the file path directly
-                const fileName = file.name.split('/').pop();
-                const imageUrl = file.name; // Gradio provides the file path
-                window.createImageThumbnail(imageUrl, fileName, index, previewArea);
+            } else if (file && typeof file === 'object') {
+                // Gradio file object or similar
+                fileName = file.name || file.path || 'unknown';
+                if (fileName.includes('/')) {
+                    fileName = fileName.split('/').pop();
+                }
+                filePath = file.name || file.path;
+                
+                if (filePath) {
+                    // Try to use the file path directly as image URL
+                    window.createImageThumbnail(filePath, fileName, index, previewArea);
+                } else {
+                    // Fallback: show file name only
+                    window.createImageThumbnail('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik00MCA0MEwyNSAyNUw1NSA1NUw0MCA0MFoiIGZpbGw9IiNEOUQ5RDkiLz4KPHN2Zz4K', fileName, index, previewArea);
+                }
+            } else {
+                console.log('Unexpected file object:', file);
             }
         });
     };
@@ -792,7 +870,11 @@ function init() {
         if (fileInput) {
             console.log('Attaching listener to file input:', fileInput);
             
-            fileInput.addEventListener('change', function(e) {
+            // Remove any existing listeners first
+            fileInput.removeEventListener('change', window.fileChangeHandler);
+            
+            // Define the handler function
+            window.fileChangeHandler = function(e) {
                 console.log('File input changed:', e.target.files);
                 if (e.target.files && e.target.files.length > 0) {
                     window.selectedImageFiles = Array.from(e.target.files);
@@ -800,7 +882,10 @@ function init() {
                 } else {
                     window.clearImagePreviews();
                 }
-            }, { once: false, passive: true });
+            };
+            
+            // Add the event listener
+            fileInput.addEventListener('change', window.fileChangeHandler, { passive: true });
             
             window.fileInputInitialized = true;
             return true;
@@ -847,12 +932,26 @@ function init() {
         window.initImageUpload();
     }
     
-    // Single retry after a delay to catch dynamically created elements
-    setTimeout(function() {
-        if (!window.fileInputInitialized) {
+    // Multiple retries to catch dynamically created elements
+    let retryCount = 0;
+    const maxRetries = 5;
+    const retryInterval = 1000;
+    
+    function retryInit() {
+        if (!window.fileInputInitialized && retryCount < maxRetries) {
+            console.log(`Retry ${retryCount + 1}/${maxRetries}: Initializing image upload`);
             window.initImageUpload();
+            retryCount++;
+            setTimeout(retryInit, retryInterval);
+        } else if (window.fileInputInitialized) {
+            console.log('Image upload initialization successful');
+        } else {
+            console.log('Image upload initialization failed after all retries');
         }
-    }, 2000);
+    }
+    
+    // Start retry process
+    setTimeout(retryInit, retryInterval);
 }
 """
 
@@ -862,6 +961,9 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
         "conversations": [],
         "conversation_id": "",
     })
+
+    # Hidden state to store selected images information
+    selected_images_state = gr.State([])
 
     with ms.Application(), antdx.XProvider(theme=DEFAULT_THEME, locale=DEFAULT_LOCALE), ms.AutoLoading():
         with antd.Row(gutter=[20, 20], wrap=False, elem_id="chatbot"):
@@ -1041,22 +1143,23 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
         inputs=[settings_form, thinking_btn_state, state],
         outputs=[
             input, image_upload, clear_btn, conversation_delete_menu_item,
-            add_conversation_btn, conversations, chatbot, upload_btn, state
+            add_conversation_btn, conversations, chatbot, upload_btn, selected_images_state, state
         ])
 
     # Input Handler
     submit_event = input.submit(
         fn=Gradio_Events.add_message,
-        inputs=[input, image_upload, settings_form, thinking_btn_state, state],
+        inputs=[input, selected_images_state,
+                settings_form, thinking_btn_state, state],
         outputs=[
             input, image_upload, clear_btn, conversation_delete_menu_item,
-            add_conversation_btn, conversations, chatbot, upload_btn, state
+            add_conversation_btn, conversations, chatbot, upload_btn, selected_images_state, state
         ])
     input.cancel(fn=Gradio_Events.cancel,
                  inputs=[state],
                  outputs=[
                      input, image_upload, conversation_delete_menu_item, clear_btn,
-                     conversations, add_conversation_btn, chatbot, upload_btn, state
+                     conversations, add_conversation_btn, chatbot, upload_btn, selected_images_state, state
                  ],
                  cancels=[submit_event, regenerating_event],
                  queue=False)
@@ -1078,51 +1181,18 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
         js="window.triggerFileUpload()"
     )
 
-    # Handle file upload changes to show preview
+    # Handle file upload changes to show preview only
     image_upload.change(
-        fn=lambda files: files,  # Pass through the files
+        fn=lambda files: files if files else [],
         inputs=[image_upload],
-        outputs=[image_upload],
-        js="""
-        (files) => {
-            console.log('Gradio file change detected:', files);
-            if (files && files.length > 0) {
-                // Convert file objects to actual File objects for preview
-                const fileList = [];
-                for (let i = 0; i < files.length; i++) {
-                    const file = files[i];
-                    if (file && file.name) {
-                        // Create a File object from the Gradio file
-                        fetch(file.name)
-                            .then(response => response.blob())
-                            .then(blob => {
-                                const actualFile = new File([blob], file.name.split('/').pop(), {
-                                    type: blob.type || 'image/jpeg'
-                                });
-                                fileList.push(actualFile);
-                                if (fileList.length === files.length) {
-                                    window.createImagePreview(fileList);
-                                }
-                            })
-                            .catch(err => {
-                                console.log('Error creating file preview:', err);
-                                // Fallback: just show file names
-                                window.createImagePreview(files);
-                            });
-                    }
-                }
-            } else {
-                window.clearImagePreviews();
-            }
-            return files;
-        }
-        """,
+        outputs=[selected_images_state],
         queue=False
     )
 
-    # Clear image previews when input is submitted
+    # Clear image previews and state when input is submitted
     input.submit(
-        outputs=[],
+        fn=lambda: [],
+        outputs=[selected_images_state],
         js="setTimeout(() => window.clearImagePreviews(), 100)",
         queue=False
     )
@@ -1130,4 +1200,4 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
 
 if __name__ == "__main__":
     demo.queue(default_concurrency_limit=100,
-               max_size=100).launch(ssr_mode=False, max_threads=100)
+               max_size=100).launch(share=True, ssr_mode=False, max_threads=100)
