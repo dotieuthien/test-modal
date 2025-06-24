@@ -95,8 +95,10 @@ class Gradio_Events:
     @staticmethod
     def submit(state_value):
         history = state_value["conversation_contexts"][state_value["conversation_id"]]["history"]
-        settings = state_value["conversation_contexts"][state_value["conversation_id"]]["settings"]
-        enable_thinking = state_value["conversation_contexts"][state_value["conversation_id"]]["enable_thinking"]
+        settings = state_value["conversation_contexts"][state_value["conversation_id"]].get(
+            "settings") or {}
+        enable_thinking = state_value["conversation_contexts"][state_value["conversation_id"]].get(
+            "enable_thinking", True)
         model = settings.get("model")
         messages = format_history(
             history, sys_prompt=settings.get("sys_prompt", ""))
@@ -1011,6 +1013,25 @@ with gr.Blocks(css=css, js=js, fill_width=True) as demo:
         fn=lambda files: files if files else [],
         inputs=[image_upload],
         outputs=[selected_images_state],
+        queue=False
+    )
+
+    selected_images_state.change(
+        fn=None,
+        inputs=[selected_images_state],
+        outputs=[],
+        js="""
+        (selected_images) => {
+            // Only clear previews if the state is empty (after successful submit)
+            if (!selected_images || selected_images.length === 0) {
+                setTimeout(() => {
+                    if (window.clearImagePreviews) {
+                        window.clearImagePreviews();
+                    }
+                }, 100);
+            }
+        }
+        """,
         queue=False
     )
 
