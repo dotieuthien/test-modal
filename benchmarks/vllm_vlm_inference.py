@@ -1,14 +1,21 @@
 import modal
+from pathlib import Path
 
 
 vllm_image = (
-    modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
+    modal.Image.from_registry(
+        "nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
     .pip_install(
         "GPUtil",
         "vllm==v0.8.3",
+        "gradio",
+        "requests",
+        "modelscope_studio",
+        "dashscope",
     )
     .run_commands("apt-get update")
     .run_commands("apt-get install -y nvtop")
+    .pip_install("openai")
 )
 
 MODELS_DIR = "/llama_models"
@@ -19,10 +26,25 @@ volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 app = modal.App("example-vllm-openai-compatible")
 
 N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
-TOKEN = "super-secret-token"  # auth token. for production use, replace with a modal.Secret
+# auth token. for production use, replace with a modal.Secret
+TOKEN = "super-secret-token"
 
 MINUTES = 60  # seconds
 HOURS = 60 * MINUTES
+
+
+# gradio app folder
+gradio_dir = Path(__file__).parent / "gradio_ui"
+gradio_remote_dir = Path("/root/gradio_ui")
+
+if not gradio_dir.exists():
+    raise RuntimeError(
+        "gradio_dir directory not found! Place the folder in the same directory."
+    )
+gradio_mount = modal.Mount.from_local_dir(
+    gradio_dir,
+    remote_path=gradio_remote_dir,
+)
 
 
 @app.function(
@@ -32,6 +54,7 @@ HOURS = 60 * MINUTES
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
     volumes={MODELS_DIR: volume},
+    mounts=[gradio_mount],
 )
 @modal.asgi_app()
 def serve():
@@ -49,11 +72,13 @@ def serve():
                                                         OpenAIServingModels)
     from vllm.usage.usage_lib import UsageContext
     
+    # import gradio app
+    import sys
+    sys.path.append("/root/gradio_ui")
     
-    # # set export VLLM_USE_V1=1 in python script
-    # import os
-    # os.environ["VLLM_USE_V1"] = "1"
-    
+    import gradio as gr
+    from gradio_ui.gradio_app import demo as gradio_app
+
     
     def print_system_info():
         import psutil
@@ -61,13 +86,14 @@ def serve():
 
         # Memory info
         mem = psutil.virtual_memory()
-        print(f"Memory: Total={mem.total / (1024**3):.2f}GB, Available={mem.available / (1024**3):.2f}GB")
-        
+        print(
+            f"Memory: Total={mem.total / (1024**3):.2f}GB, Available={mem.available / (1024**3):.2f}GB")
+
         # GPU info
         gpus = GPUtil.getGPUs()
         for i, gpu in enumerate(gpus):
-            print(f"GPU {i}: {gpu.name}, Memory Total={gpu.memoryTotal}MB, Memory Used={gpu.memoryUsed}MB")
-
+            print(
+                f"GPU {i}: {gpu.name}, Memory Total={gpu.memoryTotal}MB, Memory Used={gpu.memoryUsed}MB")
 
     volume.reload()  # ensure we have the latest version of the weights
 
@@ -90,7 +116,9 @@ def serve():
         model=MODELS_DIR + "/" + MODEL_NAME,
         gpu_memory_utilization=0.90,
         max_model_len=8096,
-        enforce_eager=False,  # capture the graph for faster inference, but slower cold starts (30s > 20s)
+        # capture the graph for faster inference, but slower cold starts (30s > 20s)
+        enforce_eager=False,
+        limit_mm_per_prompt={"image": 10},
     )
 
     engine = AsyncLLMEngine.from_engine_args(
@@ -104,7 +132,7 @@ def serve():
     base_model_paths = [
         BaseModelPath(name=MODEL_NAME.split("/")[1], model_path=MODEL_NAME)
     ]
-    
+
     openai_serving_models = OpenAIServingModels(
         engine,
         model_config=model_config,
@@ -112,7 +140,7 @@ def serve():
         lora_modules=[],
         prompt_adapters=[],
     )
-    
+
     api_server.models = lambda s: openai_serving_models
 
     api_server.chat = lambda s: OpenAIServingChat(
@@ -131,21 +159,11 @@ def serve():
         openai_serving_models,
         request_logger=request_logger,
     )
-    
+
     web_app.state.enable_server_load_tracking = True
     web_app.state.server_load_metrics = 0
-    
-    # # Run system info printing in a separate thread
-    # import threading
-    # import time
-
-    # def periodic_system_info():
-    #     time.sleep(10)  # Wait for 10 seconds initially
-    #     while True:
-    #         print_system_info()
-    #         time.sleep(10)  # Print every minute
-
-    # threading.Thread(target=periodic_system_info, daemon=True).start()
+    gradio_app.queue(default_concurrency_limit=100, max_size=100)
+    web_app = gr.mount_gradio_app(web_app, gradio_app, path="/chat")
 
     return web_app
 
