@@ -6,7 +6,7 @@ Deploy F5-TTS model using TensorRT-LLM and Triton Inference Server on Modal.
 
 - Modal CLI: `pip install modal`
 - Modal auth: `modal setup`
-- A100 GPU quota
+- L4 GPU quota
 
 ## Quick Start
 
@@ -47,6 +47,6 @@ This will send a TTS inference request to the deployed Modal endpoint and save t
 ## Model Details
 
 - **Model**: [SWivid/F5-TTS](https://huggingface.co/SWivid/F5-TTS)
-- **GPU**: A100
+- **GPU**: L4
 - **Framework**: TensorRT-LLM 0.16.0
 - **Server**: NVIDIA Triton Server 24.12

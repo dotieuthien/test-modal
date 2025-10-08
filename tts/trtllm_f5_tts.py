@@ -94,7 +94,7 @@ ref_audio_mount = modal.Mount.from_local_file(
 )
 
 N_GPUS = 1
-GPU_CONFIG = f"A100:{N_GPUS}"
+GPU_CONFIG = f"L4:{N_GPUS}"
 MINUTES = 60
 
 app = modal.App(
@@ -425,22 +425,22 @@ def serve(model_name: str = "F5TTS_Base"):
 
 @app.local_entrypoint()
 def main():
-    # # Stage 0: Download model
-    # print("Stage 0: Downloading F5-TTS model")
-    # download_f5_tts.remote()
-    # print("✓ Model downloaded")
+    # Stage 0: Download model
+    print("Stage 0: Downloading F5-TTS model")
+    download_f5_tts.remote()
+    print("✓ Model downloaded")
 
-    # # Stage 1: Build TensorRT-LLM engine
-    # print("\nStage 1: Building TensorRT-LLM engine")
-    # engine_path = build_trtllm_engine.remote()
-    # print(f"✓ Engine built: {engine_path}")
+    # Stage 1: Build TensorRT-LLM engine
+    print("\nStage 1: Building TensorRT-LLM engine")
+    engine_path = build_trtllm_engine.remote()
+    print(f"✓ Engine built: {engine_path}")
 
-    # # Stage 2: Export vocoder
-    # print("\nStage 2: Exporting vocoder")
-    # vocoder_path = export_vocoder.remote()
-    # print(f"✓ Vocoder exported: {vocoder_path}")
+    # Stage 2: Export vocoder
+    print("\nStage 2: Exporting vocoder")
+    vocoder_path = export_vocoder.remote()
+    print(f"✓ Vocoder exported: {vocoder_path}")
 
-    # print("\n✓ F5-TTS preparation complete!")
+    print("\n✓ F5-TTS preparation complete!")
 
     # Stage 3: Start Triton server
     print("\nStage 3: Starting Triton Inference Server")
