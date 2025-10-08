@@ -244,7 +244,7 @@ def export_vocoder():
     volumes={VOLUME_PATH: volume},
     container_idle_timeout=20 * MINUTES,
 )
-def start_triton_server(model_name: str = "F5TTS_Base"):
+def start_and_test_triton_server(model_name: str = "F5TTS_Base"):
     """Stage 3: Start Triton Inference Server"""
     import subprocess
     import shutil
@@ -295,8 +295,6 @@ def start_triton_server(model_name: str = "F5TTS_Base"):
 
     # Commit changes to volume
     volume.commit()
-
-    print(f"Starting Triton server with model repository: {model_repo_dest}")
 
     # Start tritonserver in background
     triton_process = subprocess.Popen([
@@ -351,32 +349,102 @@ def start_triton_server(model_name: str = "F5TTS_Base"):
     # Commit volume to save output audio
     volume.commit()
 
-    # Keep server running
-    triton_process.wait()
+    return
+
+
+@app.function(
+    image=tensorrt_image,
+    gpu=GPU_CONFIG,
+    volumes={VOLUME_PATH: volume},
+    container_idle_timeout=20 * MINUTES,
+)
+@modal.concurrent(
+    max_inputs=10
+)
+@modal.web_server(port=8000, startup_timeout=10 * MINUTES)
+def serve(model_name: str = "F5TTS_Base"):
+    """Stage 3: Start Triton Inference Server"""
+    import subprocess
+    import shutil
+    import os
+    import time
+    import requests
+
+    # Set Python path to use /usr/bin/python3 that is triton python path for python backend
+    os.environ["PATH"] = "/usr/bin:" + os.environ.get("PATH", "")
+    os.environ["PYTHON_EXECUTABLE"] = "/usr/bin/python3"
+
+    print(f"Python path set to: {os.environ['PATH']}")
+    print(f"Python executable: /usr/bin/python3")
+
+    model_repo_source = Path("/root/model_repo_f5_tts")
+    model_repo_dest = MODELS_PATH / "model_repo"
+
+    print("\nBuilding triton server model repository")
+
+    # Remove existing model repo if it exists
+    if model_repo_dest.exists():
+        print(f"Removing existing model repo: {model_repo_dest}")
+        shutil.rmtree(model_repo_dest)
+
+    # Copy model_repo_f5_tts to volume
+    print(f"Copying model repo from {model_repo_source} to {model_repo_dest}")
+    shutil.copytree(model_repo_source, model_repo_dest)
+
+    # Fill template with actual paths
+    config_file = model_repo_dest / "f5_tts" / "config.pbtxt"
+    vocab_path = F5_TTS_PATH / model_name / "vocab.txt"
+    model_checkpoint = F5_TTS_PATH / model_name / "model_1200000.pt"
+
+    print(f"Filling template in {config_file}")
+    subprocess.run([
+        "python3", str(scripts_remote_dir / "fill_template.py"),
+        "-i", str(config_file),
+        f"vocab:{vocab_path},model:{model_checkpoint},trtllm:{F5_TTS_ENGINE_PATH},vocoder:vocos"
+    ], check=True)
+
+    # Copy vocoder engine
+    vocoder_dest = model_repo_dest / "vocoder" / "1" / "vocoder.plan"
+    vocoder_dest.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Copying vocoder engine from {VOCODER_ENGINE_PATH} to {vocoder_dest}")
+    shutil.copy2(VOCODER_ENGINE_PATH, vocoder_dest)
+
+    print(f"✓ Model repository prepared at {model_repo_dest}")
+
+    # Commit changes to volume
+    volume.commit()
+
+    print(f"Starting Triton server with model repository: {model_repo_dest}")
+    cmd = [
+        "tritonserver",
+        f"--model-repository={model_repo_dest}"
+    ]
+    
+    subprocess.Popen(" ".join(cmd), shell=True)
 
 
 @app.local_entrypoint()
 def main():
-    # Stage 0: Download model
-    print("Stage 0: Downloading F5-TTS model")
-    download_f5_tts.remote()
-    print("✓ Model downloaded")
+    # # Stage 0: Download model
+    # print("Stage 0: Downloading F5-TTS model")
+    # download_f5_tts.remote()
+    # print("✓ Model downloaded")
 
-    # Stage 1: Build TensorRT-LLM engine
-    print("\nStage 1: Building TensorRT-LLM engine")
-    engine_path = build_trtllm_engine.remote()
-    print(f"✓ Engine built: {engine_path}")
+    # # Stage 1: Build TensorRT-LLM engine
+    # print("\nStage 1: Building TensorRT-LLM engine")
+    # engine_path = build_trtllm_engine.remote()
+    # print(f"✓ Engine built: {engine_path}")
 
-    # Stage 2: Export vocoder
-    print("\nStage 2: Exporting vocoder")
-    vocoder_path = export_vocoder.remote()
-    print(f"✓ Vocoder exported: {vocoder_path}")
+    # # Stage 2: Export vocoder
+    # print("\nStage 2: Exporting vocoder")
+    # vocoder_path = export_vocoder.remote()
+    # print(f"✓ Vocoder exported: {vocoder_path}")
 
-    print("\n✓ F5-TTS preparation complete!")
+    # print("\n✓ F5-TTS preparation complete!")
 
     # Stage 3: Start Triton server
     print("\nStage 3: Starting Triton Inference Server")
-    start_triton_server.remote()
+    start_and_test_triton_server.remote()
     
     
     
