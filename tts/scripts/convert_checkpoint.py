@@ -175,6 +175,7 @@ def parse_arguments():
         default="F5TTS_Base",
         choices=[
             "F5TTS_Base",
+            "F5TTS_v1_Base",
         ],
     )  # TODO: support F5TTS_v1_Base
     parser.add_argument("--timm_ckpt", type=str, default="./ckpts/model_1200000.pt")
@@ -203,10 +204,29 @@ def convert_timm_dit(args, mapping, dtype="float32"):
     torch_dtype = str_dtype_to_torch(dtype)
     tensor_parallel = mapping.tp_size
 
-    model_params = dict(torch.load(args.timm_ckpt))
-    model_params = {
-        k: v for k, v in model_params["ema_model_state_dict"].items() if k.startswith("ema_model.transformer")
-    }
+    # Load checkpoint based on file extension
+    if args.timm_ckpt.endswith('.safetensors'):
+        print(f"Loading safetensors checkpoint from {args.timm_ckpt}")
+        model_params = safetensors.torch.load_file(args.timm_ckpt)
+        # For safetensors, check if we need to extract from a nested dict
+        if any(k.startswith("ema_model.transformer") for k in model_params.keys()):
+            model_params = {
+                k: v for k, v in model_params.items() if k.startswith("ema_model.transformer")
+            }
+        elif any(k.startswith("ema_model_state_dict.ema_model.transformer") for k in model_params.keys()):
+            model_params = {
+                k.replace("ema_model_state_dict.", ""): v
+                for k, v in model_params.items()
+                if k.startswith("ema_model_state_dict.ema_model.transformer")
+            }
+    else:
+        print(f"Loading PyTorch checkpoint from {args.timm_ckpt}")
+        checkpoint = torch.load(args.timm_ckpt)
+        model_params = dict(checkpoint)
+        model_params = {
+            k: v for k, v in model_params["ema_model_state_dict"].items() if k.startswith("ema_model.transformer")
+        }
+
     prefix = "ema_model.transformer."
     model_params = {key[len(prefix) :] if key.startswith(prefix) else key: value for key, value in model_params.items()}
 

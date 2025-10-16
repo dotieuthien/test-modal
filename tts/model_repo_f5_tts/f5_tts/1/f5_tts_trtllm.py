@@ -4,6 +4,7 @@ import time
 from functools import wraps
 from typing import List, Optional
 
+import safetensors.torch
 import tensorrt as trt
 import tensorrt_llm
 import torch
@@ -31,6 +32,30 @@ def remove_tensor_padding(input_tensor, input_tensor_lengths=None):
     return output_tensor
 
 
+# class TextEmbedding(nn.Module):
+#     def __init__(self, text_num_embeds, text_dim, conv_layers=0, conv_mult=2, precompute_max_pos=4096):
+#         super().__init__()
+#         self.text_embed = nn.Embedding(text_num_embeds + 1, text_dim)  # use 0 as filler token
+#         self.register_buffer("freqs_cis", precompute_freqs_cis(text_dim, precompute_max_pos), persistent=False)
+#         self.text_blocks = nn.Sequential(*[ConvNeXtV2Block(text_dim, text_dim * conv_mult) for _ in range(conv_layers)])
+
+#     def forward(self, text):
+#         # only keep tensors with value not -1
+#         text_mask = text != -1
+#         text_pad_cut_off_index = text_mask.sum(dim=1).max()
+
+#         text = text[:, :text_pad_cut_off_index]
+#         text = self.text_embed(text)
+#         text = text + self.freqs_cis[: text.shape[1], :]
+#         for block in self.text_blocks:
+#             text = block(text)
+#         # padding text to the original length
+#         # text shape: B,seq_len,C
+#         # pad at the second dimension
+#         text = F.pad(text, (0, 0, 0, text_mask.shape[1] - text.shape[1], 0, 0), value=0)
+#         return text
+    
+
 class TextEmbedding(nn.Module):
     def __init__(self, text_num_embeds, text_dim, conv_layers=0, conv_mult=2, precompute_max_pos=4096):
         super().__init__()
@@ -40,18 +65,21 @@ class TextEmbedding(nn.Module):
 
     def forward(self, text):
         # only keep tensors with value not -1
-        text_mask = text != -1
+        text_mask = text != -1    
         text_pad_cut_off_index = text_mask.sum(dim=1).max()
 
+        text_mask_cutoff = text  == 0
         text = text[:, :text_pad_cut_off_index]
-        text = self.text_embed(text)
-        text = text + self.freqs_cis[: text.shape[1], :]
+        text = self.text_embed(text)   
+        text = text + self.freqs_cis[:text.shape[1], :]
+        text = text.masked_fill(text_mask_cutoff.unsqueeze(-1).expand(-1, -1, text.size(-1)), 0.0)
         for block in self.text_blocks:
             text = block(text)
-        # padding text to the original length
-        # text shape: B,seq_len,C
-        # pad at the second dimension
+            text = text.masked_fill(text_mask_cutoff.unsqueeze(-1).expand(-1, -1, text.size(-1)), 0.0)
+
+        # padding text back to original length
         text = F.pad(text, (0, 0, 0, text_mask.shape[1] - text.shape[1], 0, 0), value=0)
+
         return text
 
 
@@ -113,14 +141,42 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, theta_resca
 
 
 def load_checkpoint(ckpt_path, use_ema=True):
-    checkpoint = torch.load(ckpt_path, weights_only=True)
-    if use_ema:
-        checkpoint["model_state_dict"] = {
-            k.replace("ema_model.", ""): v
-            for k, v in checkpoint["ema_model_state_dict"].items()
-            if k not in ["initted", "step"]
-        }
-    dict_state = checkpoint["model_state_dict"]
+    # Load checkpoint based on file extension
+    if ckpt_path.endswith('.safetensors'):
+        print(f"Loading safetensors checkpoint from {ckpt_path}")
+        checkpoint = safetensors.torch.load_file(ckpt_path)
+        # For safetensors, keys are already flattened, check structure
+        if use_ema:
+            # Check if keys contain ema_model_state_dict prefix
+            if any(k.startswith("ema_model_state_dict.") for k in checkpoint.keys()):
+                dict_state = {
+                    k.replace("ema_model_state_dict.", "").replace("ema_model.", ""): v
+                    for k, v in checkpoint.items()
+                    if k.startswith("ema_model_state_dict.") and "initted" not in k and "step" not in k
+                }
+            # Check if keys contain ema_model prefix directly
+            elif any(k.startswith("ema_model.") for k in checkpoint.keys()):
+                dict_state = {
+                    k.replace("ema_model.", ""): v
+                    for k, v in checkpoint.items()
+                    if k.startswith("ema_model.") and "initted" not in k and "step" not in k
+                }
+            else:
+                # Keys are already in the expected format
+                dict_state = checkpoint
+        else:
+            dict_state = checkpoint
+    else:
+        print(f"Loading PyTorch checkpoint from {ckpt_path}")
+        checkpoint = torch.load(ckpt_path, weights_only=True)
+        if use_ema:
+            checkpoint["model_state_dict"] = {
+                k.replace("ema_model.", ""): v
+                for k, v in checkpoint["ema_model_state_dict"].items()
+                if k not in ["initted", "step"]
+            }
+        dict_state = checkpoint["model_state_dict"]
+
     text_embed_dict = {}
     for key in dict_state.keys():
         # transformer.text_embed.text_embed.weight -> text_embed.weight

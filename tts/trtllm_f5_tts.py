@@ -114,7 +114,7 @@ app = modal.App(
     volumes={VOLUME_PATH: volume},
     timeout=60 * MINUTES,
 )
-def download_f5_tts(model_name: str = "F5TTS_Base"):
+def download_f5_tts(model_name: str = "F5TTS_v1_Base"):
     from huggingface_hub import snapshot_download
 
     print(f"Downloading F5-TTS model: {model_name}")
@@ -132,13 +132,13 @@ def download_f5_tts(model_name: str = "F5TTS_Base"):
     volumes={VOLUME_PATH: volume},
     timeout=60 * MINUTES,
 )
-def build_trtllm_engine(model_name: str = "F5TTS_Base"):
+def build_trtllm_engine(model_name: str = "F5TTS_v1_Base"):
     """Stage 1: Convert checkpoint and build TensorRT-LLM engine"""    
     import subprocess
     
     
 
-    model_checkpoint = F5_TTS_PATH / model_name / "model_1200000.pt"
+    model_checkpoint = F5_TTS_PATH / model_name / "model_1250000.safetensors"
 
     # Step 1: Convert checkpoint
     print("Converting checkpoint")
@@ -244,7 +244,7 @@ def export_vocoder():
     volumes={VOLUME_PATH: volume},
     container_idle_timeout=20 * MINUTES,
 )
-def start_and_test_triton_server(model_name: str = "F5TTS_Base"):
+def start_and_test_triton_server(model_name: str = "F5TTS_v1_Base"):
     """Stage 3: Start Triton Inference Server"""
     import subprocess
     import shutil
@@ -276,7 +276,7 @@ def start_and_test_triton_server(model_name: str = "F5TTS_Base"):
     # Fill template with actual paths
     config_file = model_repo_dest / "f5_tts" / "config.pbtxt"
     vocab_path = F5_TTS_PATH / model_name / "vocab.txt"
-    model_checkpoint = F5_TTS_PATH / model_name / "model_1200000.pt"
+    model_checkpoint = F5_TTS_PATH / model_name / "model_1250000.safetensors"
 
     print(f"Filling template in {config_file}")
     subprocess.run([
@@ -362,7 +362,7 @@ def start_and_test_triton_server(model_name: str = "F5TTS_Base"):
     max_inputs=10
 )
 @modal.web_server(port=8000, startup_timeout=10 * MINUTES)
-def serve(model_name: str = "F5TTS_Base"):
+def serve(model_name: str = "F5TTS_v1_Base"):
     """Stage 3: Start Triton Inference Server"""
     import subprocess
     import shutil
@@ -394,7 +394,7 @@ def serve(model_name: str = "F5TTS_Base"):
     # Fill template with actual paths
     config_file = model_repo_dest / "f5_tts" / "config.pbtxt"
     vocab_path = F5_TTS_PATH / model_name / "vocab.txt"
-    model_checkpoint = F5_TTS_PATH / model_name / "model_1200000.pt"
+    model_checkpoint = F5_TTS_PATH / model_name / "model_1250000.safetensors"
 
     print(f"Filling template in {config_file}")
     subprocess.run([

@@ -227,23 +227,58 @@ def rotate_every_two_3dim(tensor: Tensor) -> Tensor:
     return out
 
 
+# def apply_rotary_pos_emb_3dim(x, rope_cos, rope_sin):
+#     if default_net().plugin_config.remove_input_padding:
+#         rot_dim = shape(rope_cos, -1)  # 64
+#         new_t_shape = concat([shape(x, 0), rot_dim])  # (-1, 64)
+#         x_ = slice(x, [0, 0], new_t_shape, [1, 1])
+#         end_dim = shape(x, -1) - shape(rope_cos, -1)
+#         new_t_unrotated_shape = concat([shape(x, 0), end_dim])  # (2, -1, 960)
+#         x_unrotated = slice(x, concat([0, rot_dim]), new_t_unrotated_shape, [1, 1])
+#         out = concat([x_ * rope_cos + rotate_every_two_3dim(x_) * rope_sin, x_unrotated], dim=-1)
+#     else:
+#         rot_dim = shape(rope_cos, 2)  # 64
+#         new_t_shape = concat([shape(x, 0), shape(x, 1), rot_dim])  # (2, -1, 64)
+#         x_ = slice(x, [0, 0, 0], new_t_shape, [1, 1, 1])
+#         end_dim = shape(x, 2) - shape(rope_cos, 2)
+#         new_t_unrotated_shape = concat([shape(x, 0), shape(x, 1), end_dim])  # (2, -1, 960)
+#         x_unrotated = slice(x, concat([0, 0, rot_dim]), new_t_unrotated_shape, [1, 1, 1])
+#         out = concat([x_ * rope_cos + rotate_every_two_3dim(x_) * rope_sin, x_unrotated], dim=-1)
+#     return out
+
+
 def apply_rotary_pos_emb_3dim(x, rope_cos, rope_sin):
+    """
+    Apply RoPE for each block (like 64 dims) across all heads.
+    Supports both normal and remove_input_padding=True mode.
+    """
     if default_net().plugin_config.remove_input_padding:
-        rot_dim = shape(rope_cos, -1)  # 64
-        new_t_shape = concat([shape(x, 0), rot_dim])  # (-1, 64)
-        x_ = slice(x, [0, 0], new_t_shape, [1, 1])
-        end_dim = shape(x, -1) - shape(rope_cos, -1)
-        new_t_unrotated_shape = concat([shape(x, 0), end_dim])  # (2, -1, 960)
-        x_unrotated = slice(x, concat([0, rot_dim]), new_t_unrotated_shape, [1, 1])
-        out = concat([x_ * rope_cos + rotate_every_two_3dim(x_) * rope_sin, x_unrotated], dim=-1)
+        # For [N, D] input
+        full_dim = shape(x, 1)
+        block_size = shape(rope_cos, 1)
+        out_blocks = []
+        for i in range(16):
+            start = i * 64
+            curr_shape = concat([shape(x, 0), block_size])
+            x_block = slice(x, [0, start], curr_shape, [1, 1])
+            cos_block = slice(rope_cos, [0, start], curr_shape, [1, 1])
+            sin_block = slice(rope_sin, [0, start], curr_shape, [1, 1])
+            rotated = rotate_every_two_3dim(x_block)
+            block_out = x_block * cos_block + rotated * sin_block
+            out_blocks.append(block_out)
+        out = concat(out_blocks, dim=-1)
     else:
-        rot_dim = shape(rope_cos, 2)  # 64
-        new_t_shape = concat([shape(x, 0), shape(x, 1), rot_dim])  # (2, -1, 64)
-        x_ = slice(x, [0, 0, 0], new_t_shape, [1, 1, 1])
-        end_dim = shape(x, 2) - shape(rope_cos, 2)
-        new_t_unrotated_shape = concat([shape(x, 0), shape(x, 1), end_dim])  # (2, -1, 960)
-        x_unrotated = slice(x, concat([0, 0, rot_dim]), new_t_unrotated_shape, [1, 1, 1])
-        out = concat([x_ * rope_cos + rotate_every_two_3dim(x_) * rope_sin, x_unrotated], dim=-1)
+        # For [B, N, D] input
+        pieces = []
+        rot_dim = shape(rope_cos, 2)
+        full_dim = shape(x, 2)
+        new_t_shape = concat([shape(x, 0), shape(x, 1), rot_dim])
+        for i in range(16):
+            x_slice = slice(x, [0, 0, i*64], new_t_shape, [1, 1, 1])
+            rotated_slice = x_slice * rope_cos + rotate_every_two_3dim(x_slice) * rope_sin
+            pieces.append(rotated_slice)
+        out = concat(pieces, dim=-1)
+
     return out
 
 
