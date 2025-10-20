@@ -4,6 +4,7 @@ import modal
 MODELS_DIR = "/llama_models"
 
 DEFAULT_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
+DEFAULT_NAME = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 
 GGUF_MODELS_NAME = "Qwen/Qwen2-7B-Instruct-GGUF"
 
@@ -26,7 +27,7 @@ HOURS = 60 * MINUTES
 
 
 app = modal.App(
-    image=image, secrets=[modal.Secret.from_name("huggingface")]
+    image=image, secrets=[modal.Secret.from_name("huggingface-secret")]
 )
 
 
