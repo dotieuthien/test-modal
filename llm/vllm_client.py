@@ -139,7 +139,7 @@ def main():
     prefix = workspace + (f"-{environment}" if environment else "")
 
     client.base_url = (
-        "https://styleme--example-vllm-qwen3-vl-30b-a3b-serve.modal.run/v1"
+        f"https://{prefix}--{args.app_name}-{args.function_name}.modal.run/v1"
     )
 
     if args.model:
@@ -232,7 +232,7 @@ def main():
                 )
     else:
         # image_url = "https://modal-public-assets.s3.amazonaws.com/golden-gate-bridge.jpg"
-        image_path = "/Users/dotieuthien/Documents/rnd/test-modal/llm/images/test/3.png"
+        image_path = "images/test/3.png"
         image = Image.open(image_path).convert("RGB")
         image_bytes = io.BytesIO()
         image.save(image_bytes, format="PNG")
