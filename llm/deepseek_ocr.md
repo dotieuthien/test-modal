@@ -100,11 +100,30 @@ response = client.chat.completions.create(
 )
 ```
 
+## Using the Gradio Demo
+
+Access the interactive web interface at:
+```
+https://[your-url].modal.run/demo
+```
+
+**Features:**
+- Upload images directly in your browser
+- Choose between DeepSeek OCR or SilverAI OCR models
+- For SilverAI OCR, optionally provide custom prompts
+- View results and latency metrics in real-time
+- See raw OCR text preview when using SilverAI OCR
+
+**Model Selection:**
+- **DeepSeek OCR**: Extracts all text from the image (default prompt: `<image>\nFree OCR.`)
+- **SilverAI OCR**: Converts OCR text to structured JSON (or uses your custom prompt)
+
 ## Available Endpoints
 
 - `GET /health` - Health check
 - `GET /v1/models` - List available models
 - `POST /v1/chat/completions` - Main OCR endpoint (model-based routing)
+- `GET /demo` - Interactive Gradio web interface
 
 ## Latency Tracking
 

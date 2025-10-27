@@ -40,6 +40,7 @@ vllm_image = (
         '"triton-kernels @ git+https://github.com/triton-lang/triton.git@v3.5.0#subdirectory=python/triton_kernels" '
         'vllm --pre --extra-index-url https://wheels.vllm.ai/nightly'
     )
+    .pip_install("gradio")
 )
 
 MODELS_DIR = "/llama_models"
@@ -548,6 +549,183 @@ async def chat_completions(request: ChatCompletionRequest):
     return response
 
 
+# Gradio Demo App
+def create_gradio_app():
+    import gradio as gr
+    import base64
+    import requests
+
+    def process_ocr(image, model_choice, custom_prompt):
+        """Process image with selected model"""
+        if image is None:
+            return "Please upload an image", ""
+
+        try:
+            # Convert image to base64
+            import io
+            from PIL import Image as PILImage
+            import time as t
+
+            request_start = t.time()
+
+            # Convert to RGB if necessary
+            if isinstance(image, PILImage.Image):
+                img = image
+            else:
+                img = PILImage.fromarray(image)
+
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+
+            # Save to bytes
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='PNG')
+            img_byte_arr = img_byte_arr.getvalue()
+            base64_image = base64.b64encode(img_byte_arr).decode('utf-8')
+
+            # Determine workflow based on model
+            if model_choice == "deepseek-ai/DeepSeek-OCR":
+                # Pure DeepSeek OCR
+                prompt_text = "<image>\nFree OCR."
+
+                result = model.generate.remote(
+                    prompts=[prompt_text],
+                    images=[base64_image],
+                    sampling_params_dict={"temperature": 0.0, "max_tokens": 8192}
+                )
+
+                output_text = result["results"][0]
+                latency = result["latency"]
+
+                request_total_ms = round((t.time() - request_start) * 1000, 2)
+
+                latency_info = f"""**Latency Information:**
+- Preprocessing: {latency['preprocessing_ms']:.2f}ms
+- Inference: {latency['inference_ms']:.2f}ms
+- Model Total: {latency['total_ms']:.2f}ms
+- Request Total: {request_total_ms:.2f}ms"""
+
+            else:  # silverai/silverai-ocr
+                # OCR + Qwen workflow
+                if not custom_prompt or custom_prompt.strip() == "":
+                    user_prompt = """You are a data formatter. Convert the OCR text into a structured JSON format.
+
+Instructions:
+- Analyze the OCR text and identify all key-value pairs, fields, and structured data 
+- Create a valid JSON object that represents the document's structure
+- Use descriptive keys based on the field names or labels found in the text
+- Return ONLY valid JSON, no additional explanation or text
+
+Exmaple
+If OCR text contains "Date: 2024-01-15, Total: $250.00"
+Return: {"date": "2024-01-15", "total": "$250.00"}
+"""
+                else:
+                    user_prompt = custom_prompt
+
+                result = model.generate_with_qwen.remote(
+                    user_prompt=user_prompt,
+                    image=base64_image,
+                    ocr_max_tokens=8192,
+                    qwen_max_tokens=8192
+                )
+
+                output_text = result["final_answer"]
+                latency = result["latency"]
+                ocr_text = result["ocr_text"]
+
+                request_total_ms = round((t.time() - request_start) * 1000, 2)
+
+                latency_info = f"""**Latency Information:**
+- OCR Processing: {latency['ocr_ms']:.2f}ms
+- Qwen LLM: {latency['qwen_ms']:.2f}ms
+- Model Total: {latency['total_ms']:.2f}ms
+- Request Total: {request_total_ms:.2f}ms"""
+
+                # Add OCR text preview
+                ocr_preview = ocr_text[:500] + "..." if len(ocr_text) > 500 else ocr_text
+                latency_info += f"\n\n**Raw OCR Text Preview:**\n```\n{ocr_preview}\n```"
+
+            return output_text, latency_info
+
+        except Exception as e:
+            import traceback
+            error_msg = f"Error: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+            return error_msg, ""
+
+    # Create Gradio interface
+    with gr.Blocks(title="DeepSeek OCR Demo") as demo:
+        gr.Markdown("# 🔍 DeepSeek OCR Demo")
+        gr.Markdown("Upload an image and choose between pure OCR extraction or intelligent document analysis with Qwen LLM.")
+
+        with gr.Row():
+            with gr.Column(scale=1):
+                image_input = gr.Image(
+                    label="Upload Image",
+                    type="pil",
+                    height=400
+                )
+
+                model_selector = gr.Radio(
+                    choices=[
+                        "deepseek-ai/DeepSeek-OCR",
+                        "silverai/silverai-ocr"
+                    ],
+                    value="deepseek-ai/DeepSeek-OCR",
+                    label="Select Model",
+                    info="DeepSeek: Pure OCR | SilverAI: OCR + LLM"
+                )
+
+                prompt_input = gr.Textbox(
+                    label="Custom Prompt (for SilverAI OCR only)",
+                    placeholder="Leave empty for default JSON formatting prompt...",
+                    lines=4,
+                    visible=False
+                )
+
+                submit_btn = gr.Button("Process Image", variant="primary")
+
+            with gr.Column(scale=1):
+                output_text = gr.Textbox(
+                    label="Result",
+                    lines=15,
+                    max_lines=20
+                )
+                latency_info = gr.Markdown(label="Performance Metrics")
+
+        # Show/hide prompt input based on model selection
+        def update_prompt_visibility(model_choice):
+            return gr.update(visible=(model_choice == "silverai/silverai-ocr"))
+
+        model_selector.change(
+            fn=update_prompt_visibility,
+            inputs=[model_selector],
+            outputs=[prompt_input]
+        )
+
+        # Process button click
+        submit_btn.click(
+            fn=process_ocr,
+            inputs=[image_input, model_selector, prompt_input],
+            outputs=[output_text, latency_info]
+        )
+
+        # Examples
+        gr.Markdown("### Examples")
+        gr.Markdown("""
+**For DeepSeek OCR:** Upload any document image for pure text extraction
+
+**For SilverAI OCR (JSON formatting):** Upload invoices, receipts, or forms for structured JSON output
+
+**For SilverAI OCR (Custom prompt):** Try prompts like:
+- "Extract the total amount and date from this invoice"
+- "Summarize the key points from this document"
+- "What is the document type and who is it addressed to?"
+        """)
+
+    return demo
+
+
 # Serve FastAPI app with Modal
 @app.function(
     image=vllm_image,
@@ -557,7 +735,11 @@ async def chat_completions(request: ChatCompletionRequest):
 )
 @modal.asgi_app()
 def fastapi_app():
-    return web_app
+    # Mount Gradio app to FastAPI
+    import gradio as gr
+    gradio_app = create_gradio_app()
+    app_with_gradio = gr.mount_gradio_app(web_app, gradio_app, path="/demo")
+    return app_with_gradio
     
     
 if __name__ == "__main__":
