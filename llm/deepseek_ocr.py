@@ -145,7 +145,7 @@ class ModelList(BaseModel):
 # Modal class for model management
 @app.cls(
     image=vllm_image,
-    gpu=f"A100:{N_GPU}",
+    gpu=f"L4:{N_GPU}",
     container_idle_timeout=10 * MINUTES,
     timeout=24 * HOURS,
     volumes={
@@ -157,14 +157,12 @@ class DeepSeekOCRModel:
     def __init__(self):
         self.llm = None
         self.qwen_model = None
-        self.qwen_tokenizer = None
 
     @modal.enter()
     def load_model(self):
         """Load the DeepSeek-OCR and Qwen models on container startup"""
         from vllm import LLM
         from vllm.model_executor.models.deepseek_ocr import NGramPerReqLogitsProcessor
-        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         print(f"Loading DeepSeek OCR model: {MODEL_NAME}")
         self.llm = LLM(
@@ -173,15 +171,16 @@ class DeepSeekOCRModel:
             mm_processor_cache_gb=0,
             logits_processors=[NGramPerReqLogitsProcessor],
             tensor_parallel_size=N_GPU,
+            gpu_memory_utilization=0.4,
         )
         print("DeepSeek OCR model loaded successfully!")
 
         print(f"Loading Qwen model: {QWEN_MODEL_NAME}")
-        self.qwen_tokenizer = AutoTokenizer.from_pretrained(MODELS_DIR + "/" + QWEN_MODEL_NAME)
-        self.qwen_model = AutoModelForCausalLM.from_pretrained(
-            MODELS_DIR + "/" + QWEN_MODEL_NAME,
-            torch_dtype="auto",
-            device_map="auto"
+        self.qwen_model = LLM(
+            model=MODELS_DIR + "/" + QWEN_MODEL_NAME,
+            enable_prefix_caching=False,
+            tensor_parallel_size=1,
+            gpu_memory_utilization=0.4,
         )
         print("Qwen model loaded successfully!")
 
@@ -301,24 +300,19 @@ class DeepSeekOCRModel:
             {"role": "user", "content": combined_prompt}
         ]
 
-        # Prepare Qwen input
-        text = self.qwen_tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-            enable_thinking=False,
-        )
-        model_inputs = self.qwen_tokenizer([text], return_tensors="pt").to(self.qwen_model.device)
-
-        # Generate Qwen response
-        generated_ids = self.qwen_model.generate(
-            **model_inputs,
-            max_new_tokens=qwen_max_tokens
+        # Create sampling params for Qwen
+        qwen_sampling_params = SamplingParams(
+            temperature=0.0,
+            max_tokens=qwen_max_tokens,
         )
 
-        # Decode output
-        output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
-        qwen_output = self.qwen_tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
+        # Generate Qwen response using vLLM chat API
+        qwen_outputs = self.qwen_model.chat(
+            messages=messages,
+            sampling_params=qwen_sampling_params,
+            chat_template_kwargs={"enable_thinking": False}
+        )
+        qwen_output = qwen_outputs[0].outputs[0].text
         qwen_time = time.time() - qwen_start
 
         total_time = time.time() - start_time
@@ -751,7 +745,7 @@ if __name__ == "__main__":
     from pathlib import Path
 
     # Get deployment URL
-    base_url = "https://dotieuthien--deepseek-ocr-openai-compatible-fastapi-app.modal.run/v1"
+    base_url = "https://styleme--deepseek-ocr-openai-compatible-fastapi-app.modal.run/v1"
 
     # Initialize OpenAI client
     client = OpenAI(
@@ -760,7 +754,7 @@ if __name__ == "__main__":
     )
 
     # Test image path
-    image_path = "/home/thiendo1/Desktop/test-modal/llm/images/test/3.png"
+    image_path = "/Users/dotieuthien/Documents/rnd/test-modal/llm/images/test/3.png"
 
     # Encode image to base64
     with open(image_path, "rb") as f:
