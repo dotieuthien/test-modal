@@ -47,14 +47,14 @@ def get_result_dir(timestamp: str, dataset_name: str) -> str:
     max_containers=1,
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
-    allow_concurrent_inputs=1000,
+    allow_concurrent_inputs=100,
     volumes={
         MODELS_DIR: volume,
     },
 )
 def run_sharegpt_benchmark(
     timestamp: str,
-    num_prompts: int = 10,
+    num_prompts: int = 100,
     backend: str = "vllm",
     endpoint: str = "/v1/completions",
     max_concurrency: int = None,
@@ -167,14 +167,14 @@ def run_sharegpt_benchmark(
     max_containers=1,
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
-    allow_concurrent_inputs=1000,
+    allow_concurrent_inputs=100,
     volumes={
         MODELS_DIR: volume,
     },
 )
 def run_visionarena_benchmark(
     timestamp: str,
-    num_prompts: int = 1000,
+    num_prompts: int = 100,
     backend: str = "openai-chat",
     endpoint: str = "/v1/chat/completions",
     hf_dataset_path: str = "lmarena-ai/VisionArena-Chat",
@@ -287,7 +287,7 @@ def run_visionarena_benchmark(
     max_containers=1,
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
-    allow_concurrent_inputs=1000,
+    allow_concurrent_inputs=100,
     volumes={
         MODELS_DIR: volume,
     },
@@ -295,7 +295,7 @@ def run_visionarena_benchmark(
 def run_structured_output_benchmark(
     timestamp: str,
     dataset_type: str = "json",  # json, grammar, regex, choice, xgrammar_bench
-    num_prompts: int = 1000,
+    num_prompts: int = 100,
     request_rate: int = 10,
     backend: str = "vllm",
     structured_output_ratio: float = None,  # Only for JSON
