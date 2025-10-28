@@ -1,150 +1,80 @@
 import modal
+from pathlib import Path
 
 
-vllm_image = modal.Image.debian_slim(python_version="3.12").pip_install(
-    "vllm==0.6.3post1", 
-    "fastapi[standard]==0.115.4",
-    "GPUtil"
+vllm_image = (
+    modal.Image.from_registry(
+        "nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
+    .pip_install(
+        "GPUtil",
+        "vllm==0.10.2",
+        "gradio",
+        "requests",
+        "modelscope_studio",
+        "dashscope",
+    )
+    .run_commands("apt-get update")
+    .run_commands("apt-get install -y nvtop")
+    .pip_install("openai")
 )
 
 MODELS_DIR = "/llama_models"
-MODEL_GGUF_NAME = "Qwen/Qwen2-7B-Instruct-GGUF/qwen2-7b-instruct-q5_k_m.gguf"
+MODEL_NAME = "openai/gpt-oss-120b"
 
+vllm_cache_vol = modal.Volume.from_name("vllm-cache", create_if_missing=True)
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
-app = modal.App("example-vllm-openai-compatible")
+FAST_BOOT = False
+
+app = modal.App("gpt-oss-120b-vllm-openai-compatible")
 
 N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
-TOKEN = "super-secret-token"  # auth token. for production use, replace with a modal.Secret
+# auth token. for production use, replace with a modal.Secret
+TOKEN = "super-secret-token"
 
 MINUTES = 60  # seconds
 HOURS = 60 * MINUTES
+VLLM_PORT = 8000
 
 
 @app.function(
     image=vllm_image,
-    gpu=f"L4:{N_GPU}",
+    gpu=f"A100:{N_GPU}",
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
-    allow_concurrent_inputs=1000,
-    volumes={MODELS_DIR: volume},
+    volumes={
+        MODELS_DIR: volume,
+        "/root/.cache/vllm": vllm_cache_vol,
+    },
 )
-@modal.asgi_app()
+@modal.concurrent(
+    max_inputs=32
+)
+@modal.web_server(port=VLLM_PORT, startup_timeout=10 * MINUTES)
 def serve():
-    import fastapi
-    import vllm.entrypoints.openai.api_server as api_server
-    from vllm.engine.arg_utils import AsyncEngineArgs
-    from vllm.engine.async_llm_engine import AsyncLLMEngine
-    from vllm.entrypoints.logger import RequestLogger
-    from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
-    from vllm.entrypoints.openai.serving_completion import (
-        OpenAIServingCompletion,
-    )
-    from vllm.entrypoints.openai.serving_engine import BaseModelPath
-    from vllm.usage.usage_lib import UsageContext
-    
-    
-    def print_system_info():
-        import psutil
-        import GPUtil
+    import subprocess
 
-        # Memory info
-        mem = psutil.virtual_memory()
-        print(f"Memory: Total={mem.total / (1024**3):.2f}GB, Available={mem.available / (1024**3):.2f}GB")
-        
-        # GPU info
-        gpus = GPUtil.getGPUs()
-        for i, gpu in enumerate(gpus):
-            print(f"GPU {i}: {gpu.name}, Memory Total={gpu.memoryTotal}MB, Memory Used={gpu.memoryUsed}MB")
-
-
-    volume.reload()  # ensure we have the latest version of the weights
-
-    # create a fastAPI app that uses vLLM's OpenAI-compatible router
-    web_app = fastapi.FastAPI(
-        title=f"OpenAI-compatible {MODEL_GGUF_NAME} server",
-        description="Run an OpenAI-compatible LLM server with vLLM on modal.com 🚀",
-        version="0.0.1",
-        docs_url="/docs",
-    )
-
-    router = fastapi.APIRouter()
-
-    # wrap vllm's router in auth router
-    router.include_router(api_server.router)
-    # add authed vllm to our fastAPI app
-    web_app.include_router(router)
-
-    engine_args = AsyncEngineArgs(
-        model=MODELS_DIR + "/" + MODEL_GGUF_NAME,
-        tensor_parallel_size=N_GPU,
-        gpu_memory_utilization=0.90,
-        max_model_len=8096,
-        quantization="gguf"
-        # enforce_eager=False,  # capture the graph for faster inference, but slower cold starts (30s > 20s)
-    )
-
-    engine = AsyncLLMEngine.from_engine_args(
-        engine_args, usage_context=UsageContext.OPENAI_API_SERVER
-    )
-
-    model_config = get_model_config(engine)
-
-    request_logger = RequestLogger(max_log_len=2048)
-
-    base_model_paths = [
-        BaseModelPath(name=MODEL_GGUF_NAME.split("/")[1], model_path=MODEL_GGUF_NAME)
+    cmd = [
+        "vllm",
+        "serve",
+        "--uvicorn-log-level=info",
+        MODELS_DIR + "/" + MODEL_NAME,
+        "--served-model-name",
+        MODEL_NAME,
+        "--host",
+        "0.0.0.0",
+        "--port",
+        str(VLLM_PORT),
+        "--async-scheduling",
     ]
 
-    api_server.chat = lambda s: OpenAIServingChat(
-        engine,
-        model_config=model_config,
-        base_model_paths=base_model_paths,
-        chat_template=None,
-        response_role="assistant",
-        lora_modules=[],
-        prompt_adapters=[],
-        request_logger=request_logger,
-    )
+    # enforce-eager disables both Torch compilation and CUDA graph capture
+    # default is no-enforce-eager. see the --compilation-config flag for tighter control
+    cmd += ["--enforce-eager" if FAST_BOOT else "--no-enforce-eager"]
 
-    api_server.completion = lambda s: OpenAIServingCompletion(
-        engine,
-        model_config=model_config,
-        base_model_paths=base_model_paths,
-        lora_modules=[],
-        prompt_adapters=[],
-        request_logger=request_logger,
-    )
-    
-    # Run system info printing in a separate thread
-    import threading
-    import time
+    # assume multiple GPUs are for splitting up large matrix multiplications
+    cmd += ["--tensor-parallel-size", str(N_GPU)]
 
-    def periodic_system_info():
-        time.sleep(10)  # Wait for 10 seconds initially
-        while True:
-            print_system_info()
-            time.sleep(10)  # Print every minute
+    print(cmd)
 
-    threading.Thread(target=periodic_system_info, daemon=True).start()
-
-    return web_app
-
-
-def get_model_config(engine):
-    import asyncio
-
-    try:  # adapted from vLLM source -- https://github.com/vllm-project/vllm/blob/507ef787d85dec24490069ffceacbd6b161f4f72/vllm/entrypoints/openai/api_server.py#L235C1-L247C1
-        event_loop = asyncio.get_running_loop()
-    except RuntimeError:
-        event_loop = None
-
-    if event_loop is not None and event_loop.is_running():
-        # If the current is instanced by Ray Serve,
-        # there is already a running event loop
-        model_config = event_loop.run_until_complete(engine.get_model_config())
-    else:
-        # When using single vLLM without engine_use_ray
-        model_config = asyncio.run(engine.get_model_config())
-
-    return model_config
+    subprocess.Popen(" ".join(cmd), shell=True)

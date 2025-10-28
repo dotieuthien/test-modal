@@ -42,7 +42,6 @@ VLLM_PORT = 8000
     gpu=f"L4:{N_GPU}",
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
-    allow_concurrent_inputs=1000,
     volumes={
         MODELS_DIR: volume,
         "/root/.cache/vllm": vllm_cache_vol,
