@@ -40,6 +40,7 @@ VLLM_PORT = 8000
 @app.function(
     image=vllm_image,
     gpu=f"A100:{N_GPU}",
+    max_containers=1,
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     volumes={

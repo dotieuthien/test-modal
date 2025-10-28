@@ -44,6 +44,7 @@ def get_result_dir(timestamp: str, dataset_name: str) -> str:
 @app.function(
     image=image,
     gpu="T4",
+    max_containers=1,
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
@@ -163,6 +164,7 @@ def run_sharegpt_benchmark(
 @app.function(
     image=image,
     gpu="T4",
+    max_containers=1,
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
@@ -282,6 +284,7 @@ def run_visionarena_benchmark(
 @app.function(
     image=image,
     gpu="T4",
+    max_containers=1,
     container_idle_timeout=5 * MINUTES,
     timeout=24 * HOURS,
     allow_concurrent_inputs=1000,
