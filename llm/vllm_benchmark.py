@@ -1,6 +1,8 @@
 import modal
 import subprocess
 import os
+import json
+import base64
 from datetime import datetime
 
 
@@ -14,6 +16,9 @@ image = (
         "vllm",
         "datasets",
         "huggingface-hub",
+        "Pillow",
+        "aiohttp",
+        "numpy",
     )
     .run_commands(
         # Clone vLLM repo to get benchmark scripts
@@ -22,10 +27,17 @@ image = (
 )
 
 MODELS_DIR = "/llama_models"
+IMAGES_DIR = "/custom_images"
 MINUTES = 60  # seconds
 HOURS = 60 * MINUTES
 
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
+
+# Mount for local test images
+local_images_mount = modal.Mount.from_local_dir(
+    "/home/thiendo1/Desktop/test-modal/llm/images/test",
+    remote_path=IMAGES_DIR,
+)
 
 
 # Global configuration - shared across all benchmarks
@@ -281,6 +293,338 @@ def run_visionarena_benchmark(
         }
 
 
+async def _run_custom_images_benchmark_async(
+    timestamp: str,
+    num_prompts: int = None,
+    prompt_text: str = "Describe this image in detail.",
+    max_concurrency: int = 10,
+    save_results: bool = True,
+):
+    """
+    Async implementation of custom benchmark with local images.
+    """
+    import asyncio
+    import aiohttp
+    import time
+    import numpy as np
+
+    dataset_name = "custom_images"
+    print(f"[Custom Images Benchmark] Starting...")
+    print(f"Server: {BENCHMARK_CONFIG['server_url']}")
+    print(f"Model: {BENCHMARK_CONFIG['served_model_name']}")
+    print(f"Images directory: {IMAGES_DIR}")
+    print(f"Max concurrency: {max_concurrency}")
+
+    # List all image files in the directory
+    image_files = sorted([
+        f for f in os.listdir(IMAGES_DIR)
+        if f.lower().endswith(('.png', '.jpg', '.jpeg'))
+    ])
+
+    print(f"Found {len(image_files)} images")
+
+    # Limit number of images if specified
+    if num_prompts is not None:
+        image_files = image_files[:num_prompts]
+        print(f"Using {len(image_files)} images")
+
+    # Prepare image data with base64 encoding
+    requests_data = []
+    for img_file in image_files:
+        img_path = os.path.join(IMAGES_DIR, img_file)
+
+        # Read and encode image as base64
+        with open(img_path, "rb") as f:
+            img_data = base64.b64encode(f.read()).decode("utf-8")
+
+        # Determine image type
+        if img_file.lower().endswith('.png'):
+            img_type = "png"
+        else:
+            img_type = "jpeg"
+
+        image_url = f"data:image/{img_type};base64,{img_data}"
+
+        requests_data.append({
+            "image_name": img_file,
+            "image_url": image_url,
+            "prompt": prompt_text
+        })
+
+    print(f"\nPrepared {len(requests_data)} requests")
+
+    # Benchmark metrics storage
+    results = []
+
+    # Semaphore for concurrency control
+    semaphore = asyncio.Semaphore(max_concurrency)
+
+    async def make_request(session, request_data, request_id):
+        """Make a single streaming request and collect metrics"""
+        async with semaphore:
+            request_payload = {
+                "model": BENCHMARK_CONFIG["served_model_name"],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": request_data["prompt"]},
+                            {"type": "image_url", "image_url": {"url": request_data["image_url"]}}
+                        ]
+                    }
+                ],
+                "max_tokens": 512,
+                "temperature": 0.0,
+                "stream": True
+            }
+
+            metrics = {
+                "request_id": request_id,
+                "image_name": request_data["image_name"],
+                "success": False,
+                "error": None,
+                "start_time": None,
+                "ttft": None,  # Time to first token
+                "end_time": None,
+                "latency": None,  # End-to-end latency
+                "output_tokens": 0,
+                "generated_text": "",
+                "itl": [],  # Inter-token latencies
+            }
+
+            try:
+                metrics["start_time"] = time.time()
+
+                async with session.post(
+                    f"{BENCHMARK_CONFIG['server_url']}/v1/chat/completions",
+                    json=request_payload,
+                    timeout=aiohttp.ClientTimeout(total=600)
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        metrics["error"] = f"HTTP {response.status}: {error_text}"
+                        return metrics
+
+                    first_token_time = None
+                    last_token_time = None
+
+                    async for line in response.content:
+                        line = line.decode('utf-8').strip()
+                        if not line or line == "data: [DONE]":
+                            continue
+
+                        if line.startswith("data: "):
+                            try:
+                                data = json.loads(line[6:])
+
+                                if "choices" in data and len(data["choices"]) > 0:
+                                    delta = data["choices"][0].get("delta", {})
+                                    content = delta.get("content", "")
+
+                                    if content:
+                                        current_time = time.time()
+
+                                        # Record time to first token
+                                        if first_token_time is None:
+                                            first_token_time = current_time
+                                            metrics["ttft"] = first_token_time - metrics["start_time"]
+                                        else:
+                                            # Record inter-token latency
+                                            if last_token_time is not None:
+                                                metrics["itl"].append(current_time - last_token_time)
+
+                                        last_token_time = current_time
+                                        metrics["output_tokens"] += 1
+                                        metrics["generated_text"] += content
+
+                            except json.JSONDecodeError:
+                                continue
+
+                metrics["end_time"] = time.time()
+                metrics["latency"] = metrics["end_time"] - metrics["start_time"]
+                metrics["success"] = True
+
+            except Exception as e:
+                metrics["error"] = str(e)
+                metrics["end_time"] = time.time()
+                if metrics["start_time"]:
+                    metrics["latency"] = metrics["end_time"] - metrics["start_time"]
+
+            return metrics
+
+    # Create aiohttp session with connection pooling
+    connector = aiohttp.TCPConnector(
+        limit=max_concurrency,
+        limit_per_host=max_concurrency,
+        ttl_dns_cache=300,
+    )
+
+    async with aiohttp.ClientSession(connector=connector) as session:
+        print("\nStarting benchmark requests...")
+        benchmark_start_time = time.time()
+
+        # Create all tasks
+        tasks = [
+            make_request(session, req_data, i)
+            for i, req_data in enumerate(requests_data)
+        ]
+
+        # Execute all requests
+        results = await asyncio.gather(*tasks)
+
+        benchmark_duration = time.time() - benchmark_start_time
+
+    # Calculate metrics
+    successful = [r for r in results if r["success"]]
+    failed = [r for r in results if not r["success"]]
+
+    print(f"\n{'='*60}")
+    print(f" Custom Images Benchmark Results ")
+    print(f"{'='*60}")
+    print(f"{'Successful requests:':<40} {len(successful):<10}")
+    print(f"{'Failed requests:':<40} {len(failed):<10}")
+    print(f"{'Maximum request concurrency:':<40} {max_concurrency:<10}")
+    print(f"{'Benchmark duration (s):':<40} {benchmark_duration:<10.2f}")
+
+    if successful:
+        # Calculate TTFT metrics
+        ttfts = [r["ttft"] for r in successful if r["ttft"] is not None]
+        if ttfts:
+            print(f"\n{'-'*60}")
+            print(f" Time to First Token (TTFT)")
+            print(f"{'-'*60}")
+            print(f"{'Mean TTFT (ms):':<40} {np.mean(ttfts) * 1000:<10.2f}")
+            print(f"{'Median TTFT (ms):':<40} {np.median(ttfts) * 1000:<10.2f}")
+            print(f"{'P99 TTFT (ms):':<40} {np.percentile(ttfts, 99) * 1000:<10.2f}")
+
+        # Calculate ITL metrics
+        all_itls = []
+        for r in successful:
+            all_itls.extend(r["itl"])
+
+        if all_itls:
+            print(f"\n{'-'*60}")
+            print(f" Inter-Token Latency (ITL)")
+            print(f"{'-'*60}")
+            print(f"{'Mean ITL (ms):':<40} {np.mean(all_itls) * 1000:<10.2f}")
+            print(f"{'Median ITL (ms):':<40} {np.median(all_itls) * 1000:<10.2f}")
+            print(f"{'P99 ITL (ms):':<40} {np.percentile(all_itls, 99) * 1000:<10.2f}")
+
+        # Calculate E2EL metrics
+        latencies = [r["latency"] for r in successful]
+        print(f"\n{'-'*60}")
+        print(f" End-to-End Latency (E2EL)")
+        print(f"{'-'*60}")
+        print(f"{'Mean E2EL (ms):':<40} {np.mean(latencies) * 1000:<10.2f}")
+        print(f"{'Median E2EL (ms):':<40} {np.median(latencies) * 1000:<10.2f}")
+        print(f"{'P99 E2EL (ms):':<40} {np.percentile(latencies, 99) * 1000:<10.2f}")
+
+        # Calculate TPOT metrics
+        tpots = []
+        for r in successful:
+            if r["output_tokens"] > 1 and r["ttft"] is not None:
+                tpot = (r["latency"] - r["ttft"]) / (r["output_tokens"] - 1)
+                tpots.append(tpot)
+
+        if tpots:
+            print(f"\n{'-'*60}")
+            print(f" Time per Output Token (TPOT)")
+            print(f"{'-'*60}")
+            print(f"{'Mean TPOT (ms):':<40} {np.mean(tpots) * 1000:<10.2f}")
+            print(f"{'Median TPOT (ms):':<40} {np.median(tpots) * 1000:<10.2f}")
+            print(f"{'P99 TPOT (ms):':<40} {np.percentile(tpots, 99) * 1000:<10.2f}")
+
+        # Throughput metrics
+        total_output_tokens = sum(r["output_tokens"] for r in successful)
+        print(f"\n{'-'*60}")
+        print(f" Throughput Metrics")
+        print(f"{'-'*60}")
+        print(f"{'Request throughput (req/s):':<40} {len(successful) / benchmark_duration:<10.2f}")
+        print(f"{'Output token throughput (tok/s):':<40} {total_output_tokens / benchmark_duration:<10.2f}")
+        print(f"{'Total output tokens:':<40} {total_output_tokens:<10}")
+
+    print(f"{'='*60}\n")
+
+    # Save results if requested
+    if save_results:
+        result_dir = get_result_dir(timestamp, dataset_name)
+        os.makedirs(result_dir, exist_ok=True)
+
+        result_file = os.path.join(result_dir, "benchmark_results.json")
+
+        result_data = {
+            "timestamp": timestamp,
+            "benchmark_duration": benchmark_duration,
+            "server_url": BENCHMARK_CONFIG['server_url'],
+            "model": BENCHMARK_CONFIG['served_model_name'],
+            "num_images": len(requests_data),
+            "max_concurrency": max_concurrency,
+            "successful_requests": len(successful),
+            "failed_requests": len(failed),
+            "results": results
+        }
+
+        with open(result_file, "w") as f:
+            json.dump(result_data, f, indent=2)
+
+        print(f"Results saved to: {result_file}")
+
+    return {
+        "status": "success",
+        "dataset": dataset_name,
+        "num_images": len(requests_data),
+        "completed": len(successful),
+        "failed": len(failed),
+        "duration": benchmark_duration,
+        "result_dir": result_dir if save_results else None,
+    }
+
+
+@app.function(
+    image=image,
+    gpu="T4",
+    max_containers=1,
+    container_idle_timeout=5 * MINUTES,
+    timeout=24 * HOURS,
+    allow_concurrent_inputs=100,
+    volumes={
+        MODELS_DIR: volume,
+    },
+    mounts=[local_images_mount],
+)
+def run_custom_images_benchmark(
+    timestamp: str,
+    num_prompts: int = None,
+    prompt_text: str = "Describe this image in detail.",
+    max_concurrency: int = 10,
+    save_results: bool = True,
+):
+    """
+    Run custom benchmark with local images by directly calling OpenAI chat/completions endpoint.
+
+    This is a synchronous wrapper around the async implementation.
+
+    Args:
+        timestamp: Timestamp for organizing results
+        num_prompts: Number of images to use (None = all images)
+        prompt_text: Text prompt to use for all images
+        max_concurrency: Maximum concurrent requests
+        save_results: Whether to save results
+    """
+    import asyncio
+
+    # Run the async function using asyncio.run()
+    return asyncio.run(
+        _run_custom_images_benchmark_async(
+            timestamp=timestamp,
+            num_prompts=num_prompts,
+            prompt_text=prompt_text,
+            max_concurrency=max_concurrency,
+            save_results=save_results,
+        )
+    )
+
+
 @app.function(
     image=image,
     gpu="T4",
@@ -445,13 +789,14 @@ def main():
 
     # List of benchmarks to run
     benchmarks = [
-        "sharegpt",
-        "visionarena",
-        "structured_json",
-        "structured_grammar",
-        "structured_regex",
-        "structured_choice",
-        "structured_xgrammar",
+        # "sharegpt",
+        # "visionarena",
+        "custom_images",
+        # "structured_json",
+        # "structured_grammar",
+        # "structured_regex",
+        # "structured_choice",
+        # "structured_xgrammar",
     ]
     results = {}
 
@@ -465,6 +810,14 @@ def main():
                 result = run_sharegpt_benchmark.remote(timestamp=timestamp)
             elif benchmark_type == "visionarena":
                 result = run_visionarena_benchmark.remote(timestamp=timestamp)
+            elif benchmark_type == "custom_images":
+                result = run_custom_images_benchmark.remote(
+                    timestamp=timestamp,
+                    num_prompts=None,  # Use all images
+                    prompt_text="Describe this image in detail.",
+                    max_concurrency=10,
+                    save_results=True,
+                )
             elif benchmark_type == "structured_json":
                 result = run_structured_output_benchmark.remote(
                     timestamp=timestamp,
