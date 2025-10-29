@@ -437,8 +437,8 @@ def generate_html_report(benchmarks, output_file):
 
 
 if __name__ == "__main__":
-    results_dir = "/home/thiendo1/Desktop/test-modal/llm/benchmark_results"
-    output_file = "/home/thiendo1/Desktop/test-modal/llm/benchmark_report.html"
+    results_dir = "benchmark_results"
+    output_file = "benchmark_report.html"
 
     print("📊 Collecting benchmarks...")
     benchmarks = collect_all_benchmarks(results_dir)

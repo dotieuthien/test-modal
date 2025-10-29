@@ -1,0 +1,4 @@
+# Create a CPU offloading buffer with 80G
+chunk_size: 256
+local_cpu: True
+max_local_cpu_size: 80
