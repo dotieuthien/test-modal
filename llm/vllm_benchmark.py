@@ -42,9 +42,9 @@ local_images_mount = modal.Mount.from_local_dir(
 
 # Global configuration - shared across all benchmarks
 BENCHMARK_CONFIG = {
-    "server_url": "https://dotieuthien--example-vllm-openai-compatible-serve.modal.run",
-    "model_name": "Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
-    "served_model_name": "Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
+    "server_url": "https://dotieuthien--gpt-oss120b-vllm-openai-compatible-serve.modal.run",
+    "model_name": "openai/gpt-oss-120b",
+    "served_model_name": "openai/gpt-oss-120b",
 }
 
 
@@ -69,7 +69,7 @@ def run_sharegpt_benchmark(
     num_prompts: int = 100,
     backend: str = "vllm",
     endpoint: str = "/v1/completions",
-    max_concurrency: int = None,
+    max_concurrency: int = 10,
     save_results: bool = True,
 ):
     """
@@ -192,7 +192,7 @@ def run_visionarena_benchmark(
     hf_dataset_path: str = "lmarena-ai/VisionArena-Chat",
     hf_split: str = "train",
     hf_subset: str = None,
-    max_concurrency: int = None,
+    max_concurrency: int = 10,
     save_results: bool = True,
 ):
     """
@@ -789,14 +789,14 @@ def main():
 
     # List of benchmarks to run
     benchmarks = [
-        # "sharegpt",
+        "sharegpt",
         # "visionarena",
-        "custom_images",
-        # "structured_json",
-        # "structured_grammar",
-        # "structured_regex",
-        # "structured_choice",
-        # "structured_xgrammar",
+        # "custom_images",
+        "structured_json",
+        "structured_grammar",
+        "structured_regex",
+        "structured_choice",
+        "structured_xgrammar",
     ]
     results = {}
 
