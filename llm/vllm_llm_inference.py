@@ -82,7 +82,7 @@ VLLM_PORT = 8000
     },
 )
 @modal.concurrent(
-    max_inputs=32
+    max_inputs=100
 )
 @modal.web_server(port=VLLM_PORT, startup_timeout=10 * MINUTES)
 def serve():
