@@ -123,7 +123,7 @@ class Model:
 
 @app.cls(
     image=image,
-    gpu="A100-80GB",
+    gpu="L4",
     volumes=volumes,
     secrets=secrets,
     timeout=24 * HOURS,
@@ -197,23 +197,23 @@ class NunchakuModel:
             cache_dir=CACHE_DIR,
         )
 
-        # # Configure memory offloading based on GPU memory
-        # gpu_memory = get_gpu_memory()
-        # if gpu_memory > 18:
-        #     print("  - Using model CPU offloading (>18GB VRAM)")
-        #     self.pipe.enable_model_cpu_offload()
-        # else:
-        #     print(f"  - Using per-layer offloading (<18GB VRAM)")
-        #     # Use per-layer offloading for low VRAM (requires only 3-4GB)
-        #     num_blocks_on_gpu = max(1, int(gpu_memory / 6))  # Adjust based on VRAM
-        #     print(f"    - Blocks on GPU: {num_blocks_on_gpu}")
-        #     transformer.set_offload(
-        #         True,
-        #         use_pin_memory=False,
-        #         num_blocks_on_gpu=num_blocks_on_gpu
-        #     )
-        #     self.pipe._exclude_from_cpu_offload.append("transformer")
-        #     self.pipe.enable_sequential_cpu_offload()
+        # Configure memory offloading based on GPU memory
+        gpu_memory = get_gpu_memory()
+        if gpu_memory > 18:
+            print("  - Using model CPU offloading (>18GB VRAM)")
+            self.pipe.enable_model_cpu_offload()
+        else:
+            print(f"  - Using per-layer offloading (<18GB VRAM)")
+            # Use per-layer offloading for low VRAM (requires only 3-4GB)
+            num_blocks_on_gpu = max(1, int(gpu_memory / 6))  # Adjust based on VRAM
+            print(f"    - Blocks on GPU: {num_blocks_on_gpu}")
+            transformer.set_offload(
+                True,
+                use_pin_memory=False,
+                num_blocks_on_gpu=num_blocks_on_gpu
+            )
+            self.pipe._exclude_from_cpu_offload.append("transformer")
+            self.pipe.enable_sequential_cpu_offload()
 
         self.pipe.set_progress_bar_config(disable=None)
         print("Nunchaku Lightning model loaded successfully!")
