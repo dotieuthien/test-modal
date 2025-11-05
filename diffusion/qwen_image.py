@@ -40,13 +40,13 @@ HOURS = 60 * MINUTES
 
 MODEL_NAME = "Qwen/Qwen-Image-Edit-2509"
 
-CACHE_DIR = Path("/cache")
+CACHE_DIR = "/cache"
 cache_volume = modal.Volume.from_name("hf-hub-cache", create_if_missing=True)
 volumes = {CACHE_DIR: cache_volume}
 
 secrets = [modal.Secret.from_name("huggingface-secret")]
 
-image = image.env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": str(CACHE_DIR)})
+image = image.env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HUB_CACHE": str(CACHE_DIR)})
 
 
 with image.imports():
