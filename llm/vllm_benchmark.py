@@ -35,7 +35,7 @@ volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
 # Mount for local test images
 local_images_mount = modal.Mount.from_local_dir(
-    "/home/thiendo1/Desktop/test-modal/llm/images/test",
+    "images/test",
     remote_path=IMAGES_DIR,
 )
 
