@@ -1,41 +1,99 @@
-# VLM Inference Benchmarks
+# vLLM Server Deployment Guide
 
-This directory contains benchmarks and load testing tools for VLM (Very Large Language Model) inference deployments on Modal.
+This guide explains how to deploy vLLM servers on Modal for GPT-OSS-120B and Qwen-235B models.
 
-## Setup Instructions
+## Prerequisites
 
-1. Download the required LLaMA models:
-   ```bash
-   modal run benchmarks/download_llama_models.py
-   ```
+- Modal account with API token configured
+- Modal CLI installed (`pip install modal`)
+- Authenticated with Modal (`modal token new`)
 
-2. Deploy the vllm inference servers:
-   ```bash
-   modal deploy benchmarks/vllm__vlm_inference.py
-   ```
+## Available Servers
 
-3. Deploy the sglang inference servers:
-   ```bash
-   modal deploy benchmarks/sglang_vlm_inference.py
-   ```
+### 1. GPT-OSS-120B Server
+**File**: `vllm_llm_inference.py`
+**Model**: `openai/gpt-oss-120b`
+**App Name**: `gpt-oss120b-vllm-openai-compatible`
 
-## Testing the Servers
+### 2. Qwen-235B Server
+**File**: `vllm_llm_qwen_235b.py`
+**Model**: `koushd/Qwen3-235B-A22B-Instruct-2507-AWQ`
+**App Name**: `qwen-235b-vllm-openai-compatible`
 
-You can test the deployed servers using the provided client scripts:
+## Deployment Commands
 
-1. Single request test:
-   ```bash
-   python benchmarks/vllm_client.py
-   python benchmarks/sglang_client.py
-   ```
+### Deploy GPT-OSS-120B with 1 GPU
 
-2. Load testing:
-   ```bash
-   locust -f benchmarks/locustfile.py
-   ```
+```bash
+modal deploy /Users/dotieuthien/Documents/rnd/test-modal/llm/vllm_llm_inference.py
+```
 
-### VLLM Performance Results
-![vllm result](images/vllm_test_1.png)
+### Deploy GPT-OSS-120B with 4 GPUs
 
-### SGLang Performance Results
-![sglang result](images/sglang_test_1.png)
+To deploy with 4 GPUs, first edit the file:
+
+```python
+# In vllm_llm_inference.py
+N_GPU = 4  # Change from 1 to 4
+```
+
+Then deploy:
+
+```bash
+modal deploy vllm_llm_inference.py
+```
+
+
+### Deploy Qwen-235B (4 GPUs Required)
+
+```bash
+modal deploy vllm_llm_qwen_235b.py
+```
+
+## Benchmarking
+
+### Overview
+
+The `vllm_benchmark.py` script provides comprehensive benchmarking capabilities for deployed vLLM servers using public datasets and custom tests.
+
+**File**: `vllm_benchmark.py`
+**App Name**: `vllm-benchmark-client`
+
+### Available Benchmarks
+
+1. **ShareGPT** - Basic LLM text generation benchmark
+2. **VisionArena** - Vision-language model benchmark
+3. **Custom Images** - Benchmark with local images
+4. **Structured Output** - JSON/Grammar/Regex/Choice generation benchmarks
+
+### Configuration
+
+Before running benchmarks, update the server configuration in `vllm_benchmark.py`:
+
+```python
+BENCHMARK_CONFIG = {
+    "server_url": "https://your-workspace--gpt-oss120b-vllm-openai-compatible-serve.modal.run",
+    "model_name": "openai/gpt-oss-120b",
+    "served_model_name": "openai/gpt-oss-120b",
+}
+```
+
+Or for Qwen-235B:
+
+```python
+BENCHMARK_CONFIG = {
+    "server_url": "https://your-workspace--qwen-235b-vllm-openai-compatible-serve.modal.run",
+    "model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
+    "served_model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
+}
+```
+
+### Running All Benchmarks
+
+To run all configured benchmarks:
+
+```bash
+modal run vllm_benchmark.py
+```
+
+This will execute all enabled benchmarks in the `main()` function (lines 794-803 in the script). By default, only ShareGPT is enabled.
