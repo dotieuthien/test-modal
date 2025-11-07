@@ -45,9 +45,9 @@ BENCHMARK_CONFIG = {
     "server_url": "https://styleme--gpt-oss120b-vllm-openai-compatible-serve.modal.run",
     "model_name": "openai/gpt-oss-120b",
     "served_model_name": "openai/gpt-oss-120b",
-    "server_url": "https://styleme--qwen-235b-vllm-openai-compatible-serve.modal.run",
-    "model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
-    "served_model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
+    # "server_url": "https://styleme--qwen-235b-vllm-openai-compatible-serve.modal.run",
+    # "model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
+    # "served_model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
 }
 
 
