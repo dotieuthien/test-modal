@@ -59,6 +59,17 @@ The `vllm_benchmark.py` script provides comprehensive benchmarking capabilities 
 **File**: `vllm_benchmark.py`
 **App Name**: `vllm-benchmark-client`
 
+### Benchmark Results
+
+Performance comparison across different model and GPU configurations:
+
+![Benchmark Results](images/benchmark.png)
+
+**Key Findings**:
+- **GPT-OSS (TP=4, 4xA100)**: Best throughput with 9.88ms mean TPOT and 252.27ms E2E latency
+- **GPT-OSS (TP=1, 1xA100)**: Lower throughput but acceptable latency for single-user scenarios
+- **Qwen3-235B (TP=4, 4xA100)**: Fastest TTFT at 229.32ms, suitable for large-scale deployment
+
 ### Available Benchmarks
 
 1. **ShareGPT** - Basic LLM text generation benchmark
