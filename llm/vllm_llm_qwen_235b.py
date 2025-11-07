@@ -51,7 +51,7 @@ lmcache_config_mount = modal.Mount.from_local_file(
 )
 
 MODELS_DIR = "/llama_models"
-MODEL_NAME = "openai/gpt-oss-120b"
+MODEL_NAME = "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ"
 
 vllm_cache_vol = modal.Volume.from_name("vllm-cache", create_if_missing=True)
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
@@ -59,13 +59,13 @@ volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 FAST_BOOT = False
 
 app = modal.App(
-    "gpt-oss120b-vllm-openai-compatible", 
+    "qwen-235b-vllm-openai-compatible", 
     mounts=[
         lmcache_config_mount
     ]
 )
 
-N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
+N_GPU = 4  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
 # auth token. for production use, replace with a modal.Secret
 TOKEN = "super-secret-token"
 
@@ -88,7 +88,7 @@ VLLM_PORT = 8000
 @modal.concurrent(
     max_inputs=100
 )
-@modal.web_server(port=VLLM_PORT, startup_timeout=10 * MINUTES)
+@modal.web_server(port=VLLM_PORT, startup_timeout=30 * MINUTES)
 def serve():
     import subprocess
 
@@ -98,14 +98,16 @@ def serve():
         "serve",
         "--uvicorn-log-level=info",
         MODELS_DIR + "/" + MODEL_NAME,
-        "--served-model-name", MODEL_NAME,
-        # "--gpu-memory-utilization",  "0.95",
-        "--max-model-len", "32768",
-        # "--max-num-seqs", "8",
-        # "--max-num-batched-tokens", "16384",
-        "--host", "0.0.0.0",
-        "--port", str(VLLM_PORT),
-        "--async-scheduling",
+        "--served-model-name",
+        MODEL_NAME,
+        # "--gpu-memory-utilization",
+        # "0.95",
+        "--max-model-len",
+        "32768",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        str(VLLM_PORT),
         # "--kv-transfer-config",
         # '\'{"kv_connector":"LMCacheConnectorV1", "kv_role":"kv_both"}\''
     ]
