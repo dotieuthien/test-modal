@@ -11,9 +11,9 @@ This guide explains how to deploy vLLM servers on Modal for GPT-OSS-120B and Qwe
 ## Available Servers
 
 ### 1. GPT-OSS-120B Server
-**File**: `vllm_llm_inference.py`
+**File**: `vllm_llm_gpt_oss_120b.py`
 **Model**: `openai/gpt-oss-120b`
-**App Name**: `gpt-oss120b-vllm-openai-compatible`
+**App Name**: `gpt-oss-120b-vllm-openai-compatible`
 
 ### 2. Qwen-235B Server
 **File**: `vllm_llm_qwen_235b.py`
@@ -25,7 +25,7 @@ This guide explains how to deploy vLLM servers on Modal for GPT-OSS-120B and Qwe
 ### Deploy GPT-OSS-120B with 1 GPU
 
 ```bash
-modal deploy /Users/dotieuthien/Documents/rnd/test-modal/llm/vllm_llm_inference.py
+modal deploy /Users/dotieuthien/Documents/rnd/test-modal/llm/vllm_llm_gpt_oss_120b.py
 ```
 
 ### Deploy GPT-OSS-120B with 4 GPUs
@@ -33,14 +33,14 @@ modal deploy /Users/dotieuthien/Documents/rnd/test-modal/llm/vllm_llm_inference.
 To deploy with 4 GPUs, first edit the file:
 
 ```python
-# In vllm_llm_inference.py
+# In vllm_llm_gpt_oss_120b.py
 N_GPU = 4  # Change from 1 to 4
 ```
 
 Then deploy:
 
 ```bash
-modal deploy vllm_llm_inference.py
+modal deploy vllm_llm_gpt_oss_120b.py
 ```
 
 
@@ -85,6 +85,25 @@ Performance comparison across different model and GPU configurations:
 - **GPT-OSS (TP=1, 1xA100)**: Lower throughput but acceptable latency for single-user scenarios
 - **Qwen3-235B (TP=4, 4xA100)**: Fastest TTFT at 229.32ms, suitable for large-scale deployment
 
+Comparison using sglang across different GPU configurations:
+
+| **Metric**                         | **Description**                       | **GPT-OSS (TP = 4, 4×A100)** | **GPT-OSS (TP = 2, 2×A100)** | **GPT-OSS (TP = 1, 1×A100)** |
+| :--------------------------------- | :------------------------------------ | :--------------------------: | :--------------------------: | :--------------------------: |
+| **Duration (s)**                   | Total benchmark runtime               |           **119.71**         |            156.22            |            130.45            |
+| **Total Input Tokens**             | Tokens received as input              |            22 946            |            22 946            |            22 946            |
+| **Total Output Tokens**            | Tokens generated as output            |            21 601            |          **21 691**          |            21 599            |
+| **Request Throughput (req/s)**     | Requests handled per second           |           **0.835**          |             0.640            |             0.767            |
+| **Total Token Throughput (tok/s)** | Input + output tokens per second      |          **372.13**          |            285.74            |            341.47            |
+| **Max Output Tokens/s**            | Peak generation speed                 |          **711.0**           |             468.0            |             328.0            |
+| **Max Concurrent Requests**        | Highest simultaneous requests handled |            **14**            |            **14**            |              13              |
+| **Mean TTFT (ms)**                 | Avg. time to first token              |          **1 486.44**        |           2 591.34           |           2 093.12           |
+| **p99 TTFT (ms)**                  | 99th-percentile first-token latency   |          **7 936.21**        |           9 098.50           |           9 574.11           |
+| **Mean TPOT (ms)**                 | Avg. time per output token            |           **43.61**          |             59.57            |             52.45            |
+| **p99 TPOT (ms)**                  | 99th-percentile token generation time |          **131.86**          |            257.16            |            183.44            |
+| **Mean ITL (ms)**                  | Avg. inter-token latency              |           **44.75**          |             58.76            |             51.29            |
+| **p99 ITL (ms)**                   | 99th-percentile inter-token latency   |          **263.19**          |            338.01            |            291.40            |
+
+
 ### Available Benchmarks
 
 1. **ShareGPT** - Basic LLM text generation benchmark
@@ -98,7 +117,7 @@ Before running benchmarks, update the server configuration in `vllm_benchmark.py
 
 ```python
 BENCHMARK_CONFIG = {
-    "server_url": "https://your-workspace--gpt-oss120b-vllm-openai-compatible-serve.modal.run",
+    "server_url": "https://your-workspace--gpt-oss-120b-vllm-openai-compatible-serve.modal.run",
     "model_name": "openai/gpt-oss-120b",
     "served_model_name": "openai/gpt-oss-120b",
 }

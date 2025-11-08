@@ -59,7 +59,7 @@ volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 FAST_BOOT = False
 
 app = modal.App(
-    "gpt-oss120b-vllm-openai-compatible", 
+    "gpt-oss-120b-vllm-openai-compatible", 
     mounts=[
         lmcache_config_mount
     ]

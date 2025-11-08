@@ -42,10 +42,19 @@ local_images_mount = modal.Mount.from_local_dir(
 
 # Global configuration - shared across all benchmarks
 BENCHMARK_CONFIG = {
-    "server_url": "https://styleme--gpt-oss120b-vllm-openai-compatible-serve.modal.run",
+    # vllm server
+    # "server_url": "https://styleme--gpt-oss-120b-vllm-openai-compatible-serve.modal.run",
+    # "model_name": "openai/gpt-oss-120b",
+    # "served_model_name": "openai/gpt-oss-120b",
+    # "server_url": "https://styleme--qwen-235b-vllm-openai-compatible-serve.modal.run",
+    # "model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
+    # "served_model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
+    
+    # sglang server
+    "server_url": "https://styleme--gpt-oss-120b-sglang-openai-compatible-serve.modal.run",
     "model_name": "openai/gpt-oss-120b",
     "served_model_name": "openai/gpt-oss-120b",
-    # "server_url": "https://styleme--qwen-235b-vllm-openai-compatible-serve.modal.run",
+    # "server_url": "https://styleme--qwen-235b-sglang-openai-compatible-serve.modal.run",
     # "model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
     # "served_model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
 }
