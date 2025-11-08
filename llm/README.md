@@ -105,32 +105,32 @@ Comparison using sglang across different GPU configurations:
 
 ### Benchmark Results with max_concurrency = 1
 
-Performance comparison between vLLM and SGLang on single GPU configuration:
+Performance comparison between vLLM and SGLang across different GPU configurations:
 
-| **Metric**                         | **Description**                       | **vLLM (TP = 1, 1×A100)** | **SGLang (TP = 1, 1×A100)** |
-| :--------------------------------- | :------------------------------------ | :-----------------------: | :-------------------------: |
-| **Duration (s)**                   | Total benchmark runtime               |        **170.02**         |           271.35            |
-| **Total Input Tokens**             | Tokens received as input              |          22 946           |           22 946            |
-| **Total Output Tokens**            | Tokens generated as output            |        **21 613**         |           21 691            |
-| **Request Throughput (req/s)**     | Requests handled per second           |        **0.588**          |            0.369            |
-| **Total Token Throughput (tok/s)** | Input + output tokens per second      |        **262.09**         |           164.50            |
-| **Max Output Tokens/s**            | Peak generation speed                 |        **376.0**          |            216.0            |
-| **Max Concurrent Requests**        | Highest simultaneous requests handled |            4              |              4              |
-| **Mean TTFT (ms)**                 | Avg. time to first token              |        **186.27**         |           587.04            |
-| **Median TTFT (ms)**               | Median time to first token            |        **142.65**         |           187.25            |
-| **p99 TTFT (ms)**                  | 99th-percentile first-token latency   |        **906.35**         |          3 592.38           |
-| **Mean TPOT (ms)**                 | Avg. time per output token            |         **7.23**          |            10.97            |
-| **Median TPOT (ms)**               | Median time per output token          |         **6.90**          |             9.20            |
-| **p99 TPOT (ms)**                  | 99th-percentile token generation time |        **11.97**          |            33.82            |
-| **Mean ITL (ms)**                  | Avg. inter-token latency              |         **7.25**          |             9.85            |
-| **Median ITL (ms)**                | Median inter-token latency            |        **0.014**          |             0.41            |
-| **p99 ITL (ms)**                   | 99th-percentile inter-token latency   |        **35.58**          |            36.63            |
+| **Metric**                         | **Description**                       | **vLLM (TP = 4, 4×A100)** | **vLLM (TP = 1, 1×A100)** | **SGLang (TP = 1, 1×A100)** |
+| :--------------------------------- | :------------------------------------ | :-----------------------: | :-----------------------: | :-------------------------: |
+| **Duration (s)**                   | Total benchmark runtime               |        **138.32**         |           170.02          |           271.35            |
+| **Total Input Tokens**             | Tokens received as input              |          22 946           |          22 946           |           22 946            |
+| **Total Output Tokens**            | Tokens generated as output            |        **21 539**         |           21 613          |           21 691            |
+| **Request Throughput (req/s)**     | Requests handled per second           |        **0.723**          |            0.588          |            0.369            |
+| **Total Token Throughput (tok/s)** | Input + output tokens per second      |        **321.62**         |           262.09          |           164.50            |
+| **Max Output Tokens/s**            | Peak generation speed                 |        **443.0**          |            376.0          |            216.0            |
+| **Max Concurrent Requests**        | Highest simultaneous requests handled |            4              |              4            |              4              |
+| **Mean TTFT (ms)**                 | Avg. time to first token              |           198.23          |        **186.27**         |           587.04            |
+| **Median TTFT (ms)**               | Median time to first token            |        **134.71**         |           142.65          |           187.25            |
+| **p99 TTFT (ms)**                  | 99th-percentile first-token latency   |        **1 238.54**       |           906.35          |          3 592.38           |
+| **Mean TPOT (ms)**                 | Avg. time per output token            |        **6.68**           |             7.23          |            10.97            |
+| **Median TPOT (ms)**               | Median time per output token          |        **5.01**           |             6.90          |             9.20            |
+| **p99 TPOT (ms)**                  | 99th-percentile token generation time |        **34.97**          |            11.97          |            33.82            |
+| **Mean ITL (ms)**                  | Avg. inter-token latency              |        **5.53**           |             7.25          |             9.85            |
+| **Median ITL (ms)**                | Median inter-token latency            |        **0.098**          |             0.014         |             0.41            |
+| **p99 ITL (ms)**                   | 99th-percentile inter-token latency   |        **30.17**          |            35.58          |            36.63            |
 
 
 **Key Findings**:
-- **vLLM**: Significantly faster across all metrics, with 1.59× better throughput (262.09 vs 164.50 tok/s)
-- **vLLM**: 37% shorter runtime (170.02s vs 271.35s) for the same workload
-- **vLLM**: Lower latencies across the board - 3.15× faster mean TTFT (186.27ms vs 587.04ms)
+- **vLLM (TP=4, 4xA100)**: Best overall performance with 321.62 tok/s throughput and fastest runtime (138.32s)
+- **vLLM (TP=1, 1xA100)**: 1.59× faster than SGLang (262.09 vs 164.50 tok/s) with 37% shorter runtime
+- **vLLM vs SGLang**: vLLM consistently outperforms SGLang across all metrics - 3.15× faster mean TTFT on single GPU
 
 
 ### Available Benchmarks
