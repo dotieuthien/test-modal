@@ -59,9 +59,9 @@ The `vllm_benchmark.py` script provides comprehensive benchmarking capabilities 
 **File**: `vllm_benchmark.py`
 **App Name**: `vllm-benchmark-client`
 
-### Benchmark Results
+### Benchmark Results with max_concurrency = 10
 
-Performance comparison across different model and GPU configurations:
+Performance comparison using vllm across different model and GPU configurations:
 
 | **Metric**                         | **Description**                       | **GPT-OSS (TP = 4, 4×A100)** | **GPT-OSS (TP = 2, 2×A100)** | **GPT-OSS (TP = 1, 1×A100)** | **Qwen3-235B (TP = 4, 4×A100)** |
 | :--------------------------------- | :------------------------------------ | :--------------------------: | :--------------------------: | :--------------------------: | :-----------------------------: |
