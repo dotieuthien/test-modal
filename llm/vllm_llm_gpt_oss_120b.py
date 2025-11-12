@@ -65,7 +65,7 @@ app = modal.App(
     ]
 )
 
-N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
+N_GPU = 4  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
 # auth token. for production use, replace with a modal.Secret
 TOKEN = "super-secret-token"
 
@@ -78,7 +78,7 @@ VLLM_PORT = 8000
     image=vllm_image,
     gpu=f"A100-80GB:{N_GPU}",
     max_containers=1,
-    container_idle_timeout=5 * MINUTES,
+    container_idle_timeout=30 * MINUTES,
     timeout=24 * HOURS,
     volumes={
         MODELS_DIR: volume,

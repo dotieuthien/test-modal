@@ -54,7 +54,7 @@ SGLANG_PORT = 8000
     image=sglang_image,
     gpu=f"A100-80GB:{N_GPU}",
     max_containers=1,
-    container_idle_timeout=5 * MINUTES,
+    container_idle_timeout=30 * MINUTES,
     timeout=24 * HOURS,
     volumes={
         MODELS_DIR: volume,

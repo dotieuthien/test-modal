@@ -43,20 +43,17 @@ local_images_mount = modal.Mount.from_local_dir(
 # Global configuration - shared across all benchmarks
 BENCHMARK_CONFIG = {
     # vllm server
-    # "server_url": "https://styleme--gpt-oss-120b-vllm-openai-compatible-serve.modal.run",
-    # "model_name": "openai/gpt-oss-120b",
-    # "served_model_name": "openai/gpt-oss-120b",
+    "server_url": "https://styleme--gpt-oss-120b-vllm-openai-compatible-serve.modal.run",
+    "model_name": "openai/gpt-oss-120b",
+    "served_model_name": "openai/gpt-oss-120b",
     # "server_url": "https://styleme--qwen-235b-vllm-openai-compatible-serve.modal.run",
     # "model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
     # "served_model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
     
     # sglang server
-    "server_url": "https://styleme--gpt-oss-120b-sglang-openai-compatible-serve.modal.run",
-    "model_name": "openai/gpt-oss-120b",
-    "served_model_name": "openai/gpt-oss-120b",
-    # "server_url": "https://styleme--qwen-235b-sglang-openai-compatible-serve.modal.run",
-    # "model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
-    # "served_model_name": "koushd/Qwen3-235B-A22B-Instruct-2507-AWQ",
+    # "server_url": "https://styleme--gpt-oss-120b-sglang-openai-compatible-serve.modal.run",
+    # "model_name": "openai/gpt-oss-120b",
+    # "served_model_name": "openai/gpt-oss-120b",
 }
 
 
@@ -81,7 +78,7 @@ def run_sharegpt_benchmark(
     num_prompts: int = 100,
     backend: str = "vllm",
     endpoint: str = "/v1/completions",
-    max_concurrency: int = 10,
+    max_concurrency: int = 1,
     save_results: bool = True,
 ):
     """
