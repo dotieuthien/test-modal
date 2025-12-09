@@ -56,8 +56,9 @@ def create_stringlist_dataset_class(string_list: list[str]):
 
 @app.cls(
     gpu="A10G",
-    secrets=[modal.Secret.from_name("huggingface")],
-    cpu=4,
+    secrets=[
+        modal.Secret.from_name("huggingface-secret")
+    ],
     timeout=600,
     container_idle_timeout=600,
     image=colpali_image,
@@ -71,7 +72,7 @@ class ColPaliModel:
 
         self.model_name = "vidore/colpali-v1.2"
         self.model: PreTrainedModel
-        self.token = os.environ.get("ACCESS_TOKEN")
+        self.token = os.environ.get("HF_TOKEN")
         self.processor: ColPaliProcessor
         self.mock_image = self.create_mock_image()
 

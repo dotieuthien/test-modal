@@ -1,30 +1,37 @@
 import modal
-
-import json
 from pathlib import Path
+import json
+import asyncio
 from rag.image import web_image
 from rag.embedding.colpali import ColPaliModel
 from modal_app import app
 
-static_path = Path(__file__).with_name("frontend").joinpath("dist").resolve()
-
-MODELS_DIR = "/llama_models"
-volume = modal.Volume.from_name("llama_models", create_if_missing=True)
-
 
 colpali = ColPaliModel()
 
+seed_data_dir = Path(__file__).parent / "seed_data"
+seed_data_remote_dir = Path("/root/seed_data")
+seed_data_mount = modal.Mount.from_local_dir(
+    seed_data_dir,
+    remote_path=seed_data_remote_dir,
+)
+
+MINUTES = 60
 
 @app.function(
     image=web_image,
     concurrency_limit=1,
     container_idle_timeout=600,
-    timeout=600,
+    timeout=60 * MINUTES,
     allow_concurrent_inputs=10,
-    volumes={MODELS_DIR: volume},
-    secrets=[modal.Secret.from_name("openai")],
+    secrets=[
+        modal.Secret.from_name("openai"),
+        modal.Secret.from_name("googlecloud-secret"),
+        modal.Secret.from_name("qdrant-secret"),
+    ],
     mounts=[
         modal.Mount.from_local_python_packages("rag"),
+        seed_data_mount,
     ],
 )
 @modal.asgi_app()
@@ -37,10 +44,11 @@ def serve():
     from fastapi.staticfiles import StaticFiles
     from fastapi.middleware.cors import CORSMiddleware
 
-    # from rag.agent.vision_rag import VRAG
-    from rag.vector_db.qdrant_client import InMemoryQdrant
+    from rag.vector_db.qdrant_client import InMemoryQdrant, QdrantCloudClient
     from rag.agent.deep_research import DeepResearch
-    from rag.llm.openai_llm import OpenAILLM
+    # from rag.agent.vision_rag import VRAG
+    from rag.llm.openai import OpenAILLM
+    from rag.llm.gemini import GeminiLLM
 
     import gradio as gr
     import time
@@ -52,10 +60,14 @@ def serve():
 
     web_app = FastAPI()
 
-    qdrant = InMemoryQdrant()
+    import os
+    if os.environ.get("QDRANT_URL"):
+        qdrant = QdrantCloudClient()
+    else:
+        qdrant = InMemoryQdrant()
 
     deep_research = DeepResearch(
-        llm=OpenAILLM(),
+        llm=GeminiLLM(),
         vector_db_client=qdrant,
         multi_modal_embedding_model=colpali
     )
@@ -89,9 +101,9 @@ def serve():
                 )
                 try:
                     async for state in deep_research.add_pdf(*byte_file):
-                        yield state
+                        yield ServerSentEvent(data=json.dumps(state))
                 except Exception as e:
-                    yield json.dumps({"error": str(e)})
+                    yield ServerSentEvent(data=json.dumps({"error": str(e)}))
             yield ServerSentEvent(
                 data=json.dumps({"id": name, "filenames": filenames}), event="complete"
             )
@@ -113,7 +125,13 @@ def serve():
                 )
                 return
             async for stage in deep_research.process(str(query.instance_id), query.query, query.count):
-                yield stage
+                if "event" in stage:
+                    yield ServerSentEvent(
+                        data=json.dumps(stage["data"]),
+                        event=stage["event"]
+                    )
+                else:
+                    yield ServerSentEvent(data=json.dumps(stage))
 
         return EventSourceResponse(event_generator())
 
@@ -121,28 +139,29 @@ def serve():
         if pdf_file is None:
             return "Please select a PDF file to upload", None
 
-        collection_id = "demo collection"
+        collection_id = "demo_collection"
         # Gradio provides the file path directly
         with open(pdf_file.name, 'rb') as f:
             pdf_bytes = f.read()
         filename = Path(pdf_file.name).name
 
         messages = ["Starting to index PDF..."]
-        try:
-            async for state in deep_research.add_pdf(collection_id, filename, pdf_bytes):
-                if isinstance(state, ServerSentEvent):
-                    data = json.loads(state.data)
-                    if "message" in data:
-                        messages.append(data["message"])
-                else:
-                    data = json.loads(state)
-                    if "message" in data:
-                        messages.append(data["message"])
+        async for state in deep_research.add_pdf(collection_id, filename, pdf_bytes):
+            if "message" in state:
+                messages.append(state["message"])
 
-            messages.append(f"PDF indexed successfully!")
-            return "\n".join(messages), collection_id
-        except Exception as e:
-            return f"Error indexing PDF: {str(e)}", None
+        messages.append(f"PDF indexed successfully!")
+        return "\n".join(messages), collection_id
+
+        # try:
+        #     async for state in deep_research.add_pdf(collection_id, filename, pdf_bytes):
+        #         if "message" in state:
+        #             messages.append(state["message"])
+
+        #     messages.append(f"PDF indexed successfully!")
+        #     return "\n".join(messages), collection_id
+        # except Exception as e:
+        #     return f"Error indexing PDF: {str(e)}", None
 
     async def process_query(collection_id, query):
         messages = []
@@ -150,40 +169,74 @@ def serve():
         results_data = []  # For DataFrame
 
         async for event in deep_research.process(query, collection_id):
-            if isinstance(event, ServerSentEvent):
-                data = json.loads(event.data)
-                if event.event == "sources":
-                    # Store all results
-                    images = []  # Reset images for new batch
-                    results_data = []  # Reset results for new batch
-                    for result in data["results"]:
-                        # Convert base64 to PIL Image
-                        import base64
-                        from io import BytesIO
-                        from PIL import Image
+            if event.get("event") == "sources":
+                data = event["data"]
+                # Store all results
+                images = []  # Reset images for new batch
+                results_data = []  # Reset results for new batch
+                for result in data["results"]:
+                    # Convert base64 to PIL Image
+                    import base64
+                    from io import BytesIO
+                    from PIL import Image
 
-                        image_data = base64.b64decode(result["image"])
-                        image = Image.open(BytesIO(image_data))
-                        images.append(image)
+                    image_data = base64.b64decode(result["image"])
+                    image = Image.open(BytesIO(image_data))
+                    images.append(image)
 
-                        results_data.append([
-                            result["score"],
-                            result["page"],
-                            result["name"]
-                        ])
+                    results_data.append([
+                        result["score"],
+                        result["page"],
+                        result["name"]
+                    ])
 
-                if "chunk" in data:
-                    messages.append(data["chunk"])
+            if event.get("event") == "chunk":
+                messages.append(event["data"])
 
-                response_text = "".join(messages)
-                yield (
-                    response_text,
-                    images,
-                    results_data
-                )
+            response_text = "".join(messages)
+            yield (
+                response_text,
+                images,
+                results_data
+            )
 
-    with gr.Blocks(title="Vision RAG Demo") as demo:
-        gr.Markdown("# Vision RAG Demo")
+    # # bulk index all pdf files in seed_data
+    # async def bulk_index_seed_data():
+    #     seed_data_dir = Path("/root/seed_data")
+    #     if not seed_data_dir.exists():
+    #         print(f"Seed data directory {seed_data_dir} does not exist.")
+    #         return
+
+    #     print(f"Scanning for PDFs in {seed_data_dir}...")
+    #     pdf_files = list(seed_data_dir.rglob("*.pdf"))
+    #     total_files = len(pdf_files)
+    #     print(f"Found {total_files} PDF files.")
+
+    #     collection_id = "demo_collection"
+
+    #     for idx, pdf_path in enumerate(pdf_files, start=1):
+    #         try:
+    #             # Check if file is already indexed (optional optimization, skipping for now)
+    #             print(f"[{idx}/{total_files}] Indexing {pdf_path.name}...")
+    #             start_time = time.time()
+
+    #             with open(pdf_path, "rb") as f:
+    #                 pdf_bytes = f.read()
+
+    #             async for state in deep_research.add_pdf(collection_id, pdf_path.name, pdf_bytes):
+    #                 if "message" in state:
+    #                     print(f"[{pdf_path.name}] {state['message'].strip()}")
+
+    #             elapsed_time = time.time() - start_time
+    #             print(f"Successfully indexed {pdf_path.name} in {elapsed_time:.2f} seconds")
+    #         except Exception as e:
+    #             elapsed_time = time.time() - start_time
+    #             print(f"Error indexing {pdf_path.name} after {elapsed_time:.2f} seconds: {e}")
+    
+    # asyncio.run(bulk_index_seed_data())
+
+    with gr.Blocks(title="RAG Demo") as demo:
+        gr.Markdown("# RAG Demo")
         gr.Markdown("Upload a PDF and ask questions about its contents.")
 
         with gr.Tabs():
@@ -213,7 +266,7 @@ def serve():
             with gr.Tab("Query PDF"):
                 query_collection_id = gr.Textbox(
                     lines=1,
-                    placeholder="Enter the Collection ID from the Upload tab...",
+                    value="demo_collection",
                     label="Collection ID"
                 )
                 upload_collection_id.change(

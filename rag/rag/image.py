@@ -27,4 +27,5 @@ web_image = (
         "fastapi",
     )
     .pip_install("numpy==2.1.1")
+    .pip_install("google-genai")
 )

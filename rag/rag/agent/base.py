@@ -1,8 +1,6 @@
 import json
 from abc import ABC
-from typing import Any, List, Tuple, AsyncGenerator
-
-from sse_starlette.sse import ServerSentEvent
+from typing import Any, List, Tuple, AsyncGenerator, Dict
 
 import cv2
 import base64
@@ -38,7 +36,7 @@ class RAGAgent(BaseAgent):
         pass
     
     async def add_pdf(self, collection_name: str, name: str, pdf: bytes
-                      ) -> AsyncGenerator[ServerSentEvent, None]:
+                      ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Add a PDF to the vector database.
         Args:
@@ -46,7 +44,7 @@ class RAGAgent(BaseAgent):
             name: The name of the PDF.
             pdf: The PDF to add to the vector database.
         Returns:
-            A generator of ServerSentEvent objects.
+            A generator of dict objects.
         """
         await self.vector_db_client.create_collection(collection_name)
 
@@ -56,9 +54,7 @@ class RAGAgent(BaseAgent):
         images = images_from_pdf_bytes(pdf)
         count = len(images)
 
-        yield ServerSentEvent(
-            data=json.dumps({"message": f"0 % of {count} pages indexed...\n"})
-        )
+        yield {"message": f"0 % of {count} pages indexed...\n"}
         
         async for embedding in self.multi_modal_embedding_model.embed_images.remote_gen.aio(
             images, batch_size
@@ -66,11 +62,7 @@ class RAGAgent(BaseAgent):
             embeddings.append(embedding)
             if idx < count:
                 percent = int(idx / count * 100)
-                yield ServerSentEvent(
-                    data=json.dumps(
-                        {"message": f"{percent} % of {count} pages indexed...\n"}
-                    )
-                )
+                yield {"message": f"{percent} % of {count} pages indexed...\n"}
             idx += 1
 
         encoded_images = []

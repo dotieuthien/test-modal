@@ -1,19 +1,22 @@
 import os
 import json
-from typing import Dict, List, AsyncGenerator
+from typing import Dict, List, AsyncGenerator, Optional
 
 from rag.llm.base import BaseLLM, ChatResponse
-from sse_starlette.sse import ServerSentEvent
+from rag.llm.types import Message
 
 
 class OpenAILLM(BaseLLM):
-    def __init__(self, model: str = "gpt-4o-mini", **kwargs):
+    def __init__(self, client: Optional[object] = None, model: str = "gpt-4o-mini", **kwargs):
         from openai import AsyncOpenAI
 
-        self.client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        if client:
+            self.client = client
+        else:
+            self.client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         self.model = model
 
-    async def chat(self, messages: List[Dict]) -> ChatResponse:
+    async def chat(self, messages: List[Message]) -> ChatResponse:
         completion = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
@@ -23,7 +26,7 @@ class OpenAILLM(BaseLLM):
             total_tokens=completion.usage.total_tokens,
         )
 
-    async def stream_chat(self, messages: List[Dict]) -> AsyncGenerator[ServerSentEvent, None]:
+    async def stream_chat(self, messages: List[Message]) -> AsyncGenerator[str, None]:
         stream = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
@@ -32,6 +35,4 @@ class OpenAILLM(BaseLLM):
 
         async for chunk in stream:
             if chunk.choices[0].delta.content is not None:
-                yield ServerSentEvent(
-                    data=json.dumps({"chunk": chunk.choices[0].delta.content})
-                )
+                yield chunk.choices[0].delta.content

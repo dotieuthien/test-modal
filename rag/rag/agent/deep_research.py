@@ -1,11 +1,10 @@
 import asyncio
 import json
-from typing import AsyncGenerator
-
-from sse_starlette.sse import ServerSentEvent
+from typing import AsyncGenerator, Dict, Any
 
 from rag.agent.base import RAGAgent
 from rag.llm.base import BaseLLM
+from rag.llm.parser import LLMOutputParser
 from rag.embedding.base import BaseEmbedding
 from rag.vector_db.base import BaseVectorDB, RetrievalResult, deduplicate
 from rag.agent.prompts import SUB_QUERY_PROMPT, REFLECTION_PROMPT
@@ -39,7 +38,7 @@ class DeepResearch(RAGAgent):
         )
         response_content = chat_response.content
 
-        return self.llm.literal_eval(response_content)
+        return LLMOutputParser.literal_eval(response_content)
 
     async def _generate_sub_gap_queries(self, query, all_sub_queries, all_search_results):
         reflection_prompt = REFLECTION_PROMPT.format(
@@ -79,7 +78,7 @@ class DeepResearch(RAGAgent):
         
         print(response_content)
 
-        return self.llm.literal_eval(response_content)
+        return LLMOutputParser.literal_eval(response_content)
 
     async def _search_image_from_vector_db(
         self, 
@@ -97,36 +96,13 @@ class DeepResearch(RAGAgent):
         )
         return results
 
-    # async def _search_text_from_vector_db(self, query: str) -> list[RetrievalResult]:
-    #     if self.embedding_model is None:
-    #         return []
-
-    #     query_vector = await self.embedding_model.embed_queries.remote.aio([query])
-    #     results = await self.vector_db_client.search_collection(
-    #         collection_name="test",
-    #         query_vector=query_vector,
-    #         count=3
-    #     )
-    #     return results
-
-    # async def _search_chunk_from_vector_db(self, query: str) -> list[RetrievalResult]:
-    #     final_results = []
-    #     tasks = [
-    #         self._search_image_from_vector_db(query),
-    #         self._search_text_from_vector_db(query)
-    #     ]
-    #     results = await asyncio.gather(*tasks)
-    #     for result in results:
-    #         final_results.extend(result)
-    #     return final_results
-
     async def retrieve(
         self, 
         query: str, 
         collection_name: str, 
         **kwargs
     ):
-        max_iter = kwargs.get("max_iter", 3)
+        max_iter = kwargs.get("max_iter", 1)
         all_search_results = []
         all_sub_queries = []
 
@@ -217,27 +193,25 @@ class DeepResearch(RAGAgent):
         query: str,
         collection_name: str, 
         **kwargs
-    ) -> AsyncGenerator[ServerSentEvent, None]:
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         
         all_search_results, all_sub_queries = await self.retrieve(query, collection_name, **kwargs)
 
-        yield ServerSentEvent(
-            data=json.dumps(
-                {
-                    "results": [
-                        {
-                            "score": result.score,
-                            "image": result.payload["image"],
-                            "page": result.payload["page"],
-                            "name": result.payload["name"],
-                        }
-                        for result in all_search_results
-                    ]
-                }
-            ),
-            event="sources",
-        )
+        yield {
+            "event": "sources",
+            "data": {
+                "results": [
+                    {
+                        "score": result.score,
+                        "image": result.payload["image"],
+                        "page": result.payload["page"],
+                        "name": result.payload["name"],
+                    }
+                    for result in all_search_results
+                ]
+            }
+        }
 
         augmented = await self.augment(query, all_search_results)
         async for completion in self.generate(augmented):
-            yield completion
+            yield {"event": "chunk", "data": completion}
