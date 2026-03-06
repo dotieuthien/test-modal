@@ -1,6 +1,13 @@
 import modal
 
-image = modal.Image.debian_slim().pip_install("litellm[proxy]")
+image = (
+    modal.Image.debian_slim()
+    .pip_install("litellm[proxy]")
+    .add_local_file(
+        local_path="config.yaml",
+        remote_path="/root/config.yaml"
+    )
+)
 app = modal.App(name="example-litellm-proxy", image=image)
 
 
@@ -13,8 +20,6 @@ VLLM_PORT = 8000
     image=image,
     scaledown_window=15 * MINUTES,  # how long should we stay up with no requests?
     timeout=10 * MINUTES,  # how long should we wait for container start?
-    # mount config.yaml
-    mounts=[modal.Mount.from_local_file("config.yaml", remote_path="/root/config.yaml")]
 )
 @modal.concurrent(  # how many requests can one replica handle? tune carefully!
     max_inputs=32

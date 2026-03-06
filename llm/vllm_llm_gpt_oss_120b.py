@@ -37,18 +37,18 @@ vllm_image = (
     )
     .run_commands(
         'uv pip install --system '
-        'vllm[flashinfer]==0.11'
+        'vllm[flashinfer]==0.11.1'
     )
     .pip_install("lmcache==0.3.7")
 )
 
-lmcache_config_path = Path(__file__).parent / "lmcache_config.yaml"
-lmcache_config_remote_path = Path("/root/lmcache_config.yaml")
+# lmcache_config_path = Path(__file__).parent / "lmcache_config.yaml"
+# lmcache_config_remote_path = Path("/root/lmcache_config.yaml")
 
-lmcache_config_mount = modal.Mount.from_local_file(
-    lmcache_config_path,
-    remote_path=lmcache_config_remote_path,
-)
+# lmcache_config_mount = modal.Mount.from_local_file(
+#     lmcache_config_path,
+#     remote_path=lmcache_config_remote_path,
+# )
 
 MODELS_DIR = "/llama_models"
 MODEL_NAME = "openai/gpt-oss-120b"
@@ -59,13 +59,10 @@ volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 FAST_BOOT = False
 
 app = modal.App(
-    "gpt-oss-120b-vllm-openai-compatible", 
-    mounts=[
-        lmcache_config_mount
-    ]
+    "gpt-oss-120b-vllm-openai-compatible"
 )
 
-N_GPU = 4  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
+N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
 # auth token. for production use, replace with a modal.Secret
 TOKEN = "super-secret-token"
 
@@ -102,10 +99,11 @@ def serve():
         # "--gpu-memory-utilization",  "0.95",
         "--max-model-len", "32768",
         # "--max-num-seqs", "8",
-        # "--max-num-batched-tokens", "16384",
+        # "--max-num-batched-tokens", "2048",
         "--host", "0.0.0.0",
         "--port", str(VLLM_PORT),
         "--async-scheduling",
+        "--enable-chunked-prefill",
         # "--kv-transfer-config",
         # '\'{"kv_connector":"LMCacheConnectorV1", "kv_role":"kv_both"}\''
     ]

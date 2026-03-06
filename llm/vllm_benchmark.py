@@ -24,6 +24,10 @@ image = (
         # Clone vLLM repo to get benchmark scripts
         "cd /opt && git clone --depth 1 https://github.com/vllm-project/vllm.git",
     )
+    .add_local_dir(
+        local_path="images/test",
+        remote_path="/custom_images"
+    )
 )
 
 MODELS_DIR = "/llama_models"
@@ -33,17 +37,11 @@ HOURS = 60 * MINUTES
 
 volume = modal.Volume.from_name("llama_models", create_if_missing=True)
 
-# Mount for local test images
-local_images_mount = modal.Mount.from_local_dir(
-    "images/test",
-    remote_path=IMAGES_DIR,
-)
-
 
 # Global configuration - shared across all benchmarks
 BENCHMARK_CONFIG = {
     # vllm server
-    "server_url": "https://styleme--gpt-oss-120b-vllm-openai-compatible-serve.modal.run",
+    "server_url": "https://dotieuthien--gpt-oss-120b-vllm-openai-compatible-serve.modal.run",
     "model_name": "openai/gpt-oss-120b",
     "served_model_name": "openai/gpt-oss-120b",
     # "server_url": "https://styleme--qwen-235b-vllm-openai-compatible-serve.modal.run",
@@ -78,7 +76,7 @@ def run_sharegpt_benchmark(
     num_prompts: int = 100,
     backend: str = "vllm",
     endpoint: str = "/v1/completions",
-    max_concurrency: int = 1,
+    max_concurrency: int = 20,
     save_results: bool = True,
 ):
     """
@@ -599,7 +597,6 @@ async def _run_custom_images_benchmark_async(
     volumes={
         MODELS_DIR: volume,
     },
-    mounts=[local_images_mount],
 )
 def run_custom_images_benchmark(
     timestamp: str,

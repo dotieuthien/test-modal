@@ -3,11 +3,10 @@ import openai
 
 client = openai.OpenAI(
     api_key="super-secret-token",             # pass litellm proxy key, if you're using virtual keys
-    base_url="https://styleme--example-litellm-proxy-serve.modal.run", # litellm-proxy-base url
+    base_url="https://dotieuthien--example-litellm-proxy-serve.modal.run", # litellm-proxy-base url
 )
 response = client.chat.completions.create(
-    # model="silverai/qwen2.5-vl-7b-instruct-awq",
-    model="silverai/qwen3-vl-30b-a3b-instruct",
+    model="openai/gpt-oss-120b",
     messages = [
         {
             "role": "user",
