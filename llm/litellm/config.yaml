@@ -1,0 +1,6 @@
+model_list:
+  - model_name: openai/gpt-oss-120b
+    litellm_params:
+      model: hosted_vllm/openai/gpt-oss-120b
+      api_base: https://dotieuthien--gpt-oss-120b-vllm-openai-compatible-serve.modal.run/v1
+      drop_params: true

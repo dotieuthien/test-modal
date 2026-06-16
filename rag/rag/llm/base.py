@@ -1,0 +1,30 @@
+import ast
+import re
+from abc import ABC, abstractmethod
+from typing import Any, List, Dict, AsyncGenerator
+
+from rag.llm.types import Message
+
+
+class ChatResponse(ABC):
+    def __init__(self, content: str, total_tokens: int) -> None:
+        self.content = content
+        self.total_tokens = total_tokens
+
+    def __repr__(self) -> str:
+        return f"ChatResponse(content={self.content}, total_tokens={self.total_tokens})"
+    
+    
+class BaseLLM(ABC):
+    def __init__(self, **kwargs):
+        pass
+    
+    @abstractmethod
+    async def chat(self, messages: List[Message], **kwargs) -> ChatResponse:
+        pass
+    
+    @abstractmethod
+    async def stream_chat(self, messages: List[Message], **kwargs) -> AsyncGenerator[str, None]:
+        pass
+    
+    

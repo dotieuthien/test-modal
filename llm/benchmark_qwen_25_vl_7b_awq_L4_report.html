@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>vLLM Benchmark Report</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        header h1 { font-size: 2.5em; margin-bottom: 10px; font-weight: 700; }
+        header p { font-size: 1.1em; opacity: 0.9; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 40px;
+            background: #f8f9fa;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover { transform: translateY(-5px); }
+
+        .stat-card h3 {
+            color: #667eea;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label { color: #718096; font-size: 0.9em; }
+
+        .content { padding: 40px; }
+
+        .benchmark-section {
+            margin-bottom: 50px;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .benchmark-section h2 {
+            font-size: 1.8em;
+            color: #2d3748;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .metrics-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .metrics-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .metrics-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .metrics-table tr:hover { background: #f7fafc; }
+
+        footer {
+            background: #2d3748;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 vLLM Benchmark Report</h1>
+            <p>Generated on 2025-10-30 11:08:15</p>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Benchmark Categories</h3>
+                <div class="value">3</div>
+                <div class="label">Test Types</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Tests</h3>
+                <div class="value">3</div>
+                <div class="label">Benchmark Runs</div>
+            </div>
+            <div class="stat-card">
+                <h3>Avg Throughput</h3>
+                <div class="value">173.2</div>
+                <div class="label">tokens/sec</div>
+            </div>
+            <div class="stat-card">
+                <h3>Avg TTFT</h3>
+                <div class="value">466</div>
+                <div class="label">ms</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="benchmark-section">
+                <h2>📊 Performance Comparison</h2>
+                <div class="chart-container" id="ttft-chart"></div>
+                <div class="chart-container" id="throughput-chart"></div>
+                <div class="chart-container" id="tpot-chart"></div>
+            </div>
+
+            <div class="benchmark-section">
+                <h2>📋 Custom Images</h2>
+                <table class="metrics-table">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Requests</th>
+                            <th>TTFT (ms)</th>
+                            <th>TPOT (ms)</th>
+                            <th>Throughput (tok/s)</th>
+                            <th>Duration (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                        <tr>
+                            <td><strong>benchmark_results.json</strong></td>
+                            <td>0</td>
+                            <td>0.00</td>
+                            <td>0.00</td>
+                            <td>0.00</td>
+                            <td>0.00</td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="benchmark-section">
+                <h2>📋 Visionarena</h2>
+                <table class="metrics-table">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Requests</th>
+                            <th>TTFT (ms)</th>
+                            <th>TPOT (ms)</th>
+                            <th>Throughput (tok/s)</th>
+                            <th>Duration (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                        <tr>
+                            <td><strong>openai-chat-infqps-concurrency10-Qwen2.5-VL-7B-Ins</strong></td>
+                            <td>100</td>
+                            <td>1196.10</td>
+                            <td>44.37</td>
+                            <td>179.33</td>
+                            <td>61.09</td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="benchmark-section">
+                <h2>📋 Sharegpt</h2>
+                <table class="metrics-table">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Requests</th>
+                            <th>TTFT (ms)</th>
+                            <th>TPOT (ms)</th>
+                            <th>Throughput (tok/s)</th>
+                            <th>Duration (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                        <tr>
+                            <td><strong>vllm-infqps-concurrency10-Qwen2.5-VL-7B-Instruct-A</strong></td>
+                            <td>100</td>
+                            <td>200.49</td>
+                            <td>25.39</td>
+                            <td>340.28</td>
+                            <td>64.17</td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+        <footer>
+            <p>vLLM Benchmark Report | Model: Qwen2.5-VL-7B-Instruct-AWQ</p>
+        </footer>
+    </div>
+
+    <script>
+        // TTFT Chart
+        var ttftData = [{
+            x: ["Custom Images", "Visionarena", "Sharegpt"],
+            y: [0, 1196.0970357299998, 200.4924305900001],
+            type: 'bar',
+            marker: {
+                color: '#667eea',
+                line: { color: '#764ba2', width: 2 }
+            },
+            name: 'Mean TTFT'
+        }];
+
+        var ttftLayout = {
+            title: 'Time to First Token (TTFT) Comparison',
+            xaxis: {
+                title: 'Benchmark Category',
+                tickfont: { size: 14 }
+            },
+            yaxis: { title: 'Time (ms)' },
+            height: 450,
+            showlegend: false,
+            margin: { b: 100 }
+        };
+
+        Plotly.newPlot('ttft-chart', ttftData, ttftLayout);
+
+        // Throughput Chart
+        var throughputData = [{
+            x: ["Custom Images", "Visionarena", "Sharegpt"],
+            y: [0, 179.32852236140084, 340.28155180444764],
+            type: 'bar',
+            marker: {
+                color: '#48bb78',
+                line: { color: '#2f855a', width: 2 }
+            },
+            name: 'Throughput'
+        }];
+
+        var throughputLayout = {
+            title: 'Output Throughput Comparison',
+            xaxis: {
+                title: 'Benchmark Category',
+                tickfont: { size: 14 }
+            },
+            yaxis: { title: 'Tokens/Second' },
+            height: 450,
+            showlegend: false,
+            margin: { b: 100 }
+        };
+
+        Plotly.newPlot('throughput-chart', throughputData, throughputLayout);
+
+        // TPOT Chart
+        var tpotData = [{
+            x: ["Custom Images", "Visionarena", "Sharegpt"],
+            y: [0, 44.36731940801723, 25.391356678497175],
+            type: 'bar',
+            marker: {
+                color: '#ed8936',
+                line: { color: '#c05621', width: 2 }
+            },
+            name: 'Mean TPOT'
+        }];
+
+        var tpotLayout = {
+            title: 'Time Per Output Token (TPOT) Comparison',
+            xaxis: {
+                title: 'Benchmark Category',
+                tickfont: { size: 14 }
+            },
+            yaxis: { title: 'Time (ms)' },
+            height: 450,
+            showlegend: false,
+            margin: { b: 100 }
+        };
+
+        Plotly.newPlot('tpot-chart', tpotData, tpotLayout);
+    </script>
+</body>
+</html>
